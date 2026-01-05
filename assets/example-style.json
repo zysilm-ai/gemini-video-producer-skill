@@ -1,0 +1,59 @@
+{
+  "project_name": "Example Video Project",
+  "version": "1.0",
+  "visual_style": {
+    "art_style": "Cinematic realism with vibrant colors",
+    "color_palette": {
+      "primary": ["deep blue", "warm orange", "soft white"],
+      "secondary": ["forest green", "golden yellow"],
+      "accent": ["bright coral"],
+      "avoid": ["neon colors", "pure black backgrounds"]
+    },
+    "lighting": {
+      "type": "natural lighting, golden hour preferred",
+      "direction": "upper-left as default",
+      "quality": "soft shadows, volumetric when appropriate"
+    },
+    "composition": {
+      "default": "rule of thirds",
+      "emphasis": "center framing for key moments",
+      "negative_space": "use for breathing room"
+    }
+  },
+  "motion_language": {
+    "movement_quality": "smooth and fluid, weighted and natural",
+    "pacing": {
+      "establishing": "slow, 5-8 seconds",
+      "action": "dynamic, 3-5 seconds per beat",
+      "emotional": "hold moments, let them breathe"
+    },
+    "camera_style": "steady tracking, occasional slow push-in",
+    "avoid": ["shaky cam", "rapid unmotivated cuts", "excessive zoom"]
+  },
+  "subjects": {
+    "main_character": {
+      "type": "character",
+      "description": "Describe your main character here",
+      "outfit": "Describe typical clothing",
+      "references": []
+    },
+    "environment": {
+      "type": "location",
+      "description": "Describe primary environment",
+      "time_of_day": "golden hour",
+      "weather": "clear with some clouds"
+    }
+  },
+  "constraints": {
+    "avoid": [
+      "text or watermarks in frame",
+      "anachronistic elements",
+      "excessive lens flare"
+    ],
+    "maintain": [
+      "consistent lighting direction within scenes",
+      "character appearance and proportions",
+      "color grade across all scenes"
+    ]
+  }
+}

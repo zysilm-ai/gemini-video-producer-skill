@@ -1,0 +1,22 @@
+# Core dependencies
+google-genai>=0.3.0
+Pillow>=10.0.0
+
+# PyTorch (install separately with CUDA support)
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# HuggingFace diffusers stack
+diffusers>=0.31.0
+transformers>=4.44.0
+accelerate>=0.33.0
+huggingface_hub>=0.25.0
+hf_xet>=1.0.0  # Faster model downloads
+
+# Quantization support
+optimum-quanto>=0.2.0
+
+# Utilities
+tqdm>=4.66.0
+safetensors>=0.4.0
+sentencepiece>=0.2.0
+gguf>=0.6.0  # GGUF quantization support
