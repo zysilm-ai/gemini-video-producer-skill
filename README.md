@@ -22,7 +22,7 @@ A Claude Code / OpenCode skill for AI video production using **Gemini** via **MC
 Simply describe what video you want:
 
 ```
-You: Create a 15-second first-person battlefield experience
+You: Create a first-person battlefield experience
 
 Claude: I'll help you create that video. Let me start by establishing
 a Production Philosophy and breaking down the scenes...
