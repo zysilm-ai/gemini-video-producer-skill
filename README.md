@@ -9,13 +9,33 @@ A Claude Code / OpenCode skill for AI video production using **Gemini** via **MC
 
 ## Example
 
-[![Watch the video](doc/example-thumbnail.png)](https://github.com/zysilm-ai/gemini-video-producer-skill/raw/main/doc/example.mp4)
+[![Watch the video](doc/example-thumbnail.png)](https://raw.githubusercontent.com/zysilm-ai/gemini-video-producer-skill/main/doc/example.mp4)
 
 *Click thumbnail to download and watch the 24-second video*
 
 > **Created with one prompt:** *"photorealistic battlefield, first person"*
 >
 > This **24-second continuous shot** exceeds Gemini's 8-second limit per generation. The skill automatically breaks down scenes, chains video segments with extracted keyframes for seamless continuity, and concatenates them into a single fluid output.
+
+## Quick Start
+
+Simply describe what video you want:
+
+```
+You: Create a 15-second first-person battlefield experience
+
+Claude: I'll help you create that video. Let me start by establishing
+a Production Philosophy and breaking down the scenes...
+```
+
+Claude will:
+- Auto-install MCP Playwright if missing
+- Navigate to Gemini and check login status
+- Guide you through the production workflow
+- Generate assets, keyframes, and videos with your approval
+- Concatenate final output
+
+**Prerequisites:** Claude Code or OpenCode CLI, Google account with Gemini access
 
 ## Overview
 
@@ -37,44 +57,7 @@ The philosophy-first approach ensures visual coherence across all scenes.
 - **MCP Automation** - Claude directly controls browser via MCP Playwright
 - **Self-Healing** - Adapts to UI changes through semantic understanding
 - **Video-First Pipeline** - Perfect visual continuity between scenes
-- **Simple Setup** - Just install MCP server and log in to Google
-
-## Prerequisites
-
-**Required:**
-- Claude Code or OpenCode CLI
-- MCP Playwright server
-- Google account with Gemini access
-- Internet connection
-
-**Optional:**
-- Python with OpenCV (for frame extraction fallback)
-- ffmpeg (for video concatenation)
-
-## Quick Start
-
-### 1. Install MCP Playwright Server
-
-```bash
-claude mcp add playwright -- npx @playwright/mcp@latest
-```
-
-### 2. Start Creating Videos
-
-Simply describe what video you want:
-
-```
-You: Create a 15-second first-person battlefield experience
-
-Claude: I'll help you create that video. Let me start by establishing
-a Production Philosophy and breaking down the scenes...
-```
-
-Claude will:
-- Navigate to Gemini and check login status
-- Guide you through the production workflow
-- Generate assets, keyframes, and videos with your approval
-- Concatenate final output
+- **Zero Setup** - MCP Playwright auto-installs if missing, just log in to Google
 
 ## Architecture
 

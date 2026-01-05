@@ -19,11 +19,22 @@ Create professional AI-generated videos through a structured, iterative workflow
 ## Prerequisites & Setup
 
 **Required:**
-- MCP Playwright server installed: `claude mcp add playwright -- npx @playwright/mcp@latest`
 - Google account with Gemini access
 - Internet connection
 
+**MCP Playwright:** If not installed, run automatically:
+```bash
+claude mcp add playwright -- npx @playwright/mcp@latest
+```
+
 **No Python scripts required!** Claude directly controls the browser via MCP.
+
+### Auto-Setup Check
+
+At workflow start, verify MCP Playwright is available:
+1. Try calling `mcp__playwright__browser_snapshot()`
+2. If tools unavailable, offer to install: `claude mcp add playwright -- npx @playwright/mcp@latest`
+3. After install, user must restart Claude Code for MCP to load
 
 ## MANDATORY WORKFLOW REQUIREMENTS
 
