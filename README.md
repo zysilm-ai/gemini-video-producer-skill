@@ -9,7 +9,9 @@ A Claude Code / OpenCode skill for AI video production using **Gemini** via **MC
 
 ## Example
 
-<video src="https://github.com/zysilm-ai/gemini-video-producer-skill/raw/main/doc/example.mp4" controls width="100%"></video>
+[![Watch the video](doc/example-thumbnail.png)](https://github.com/zysilm-ai/gemini-video-producer-skill/raw/main/doc/example.mp4)
+
+*Click thumbnail to download and watch the 24-second video*
 
 > **Created with one prompt:** *"photorealistic battlefield, first person"*
 >
