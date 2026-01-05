@@ -7,6 +7,14 @@
 
 A Claude Code / OpenCode skill for AI video production using **Gemini** via **MCP Playwright** browser automation. Creates any video type: promotional, educational, narrative, social media, animations, game trailers, music videos, and more.
 
+## Example
+
+https://github.com/zysilm-ai/gemini-video-producer-skill/raw/main/doc/example.mp4
+
+> **Created with one prompt:** *"photorealistic battlefield, first person"*
+>
+> This **24-second continuous shot** exceeds Gemini's 8-second limit per generation. The skill automatically breaks down scenes, chains video segments with extracted keyframes for seamless continuity, and concatenates them into a single fluid output.
+
 ## Overview
 
 This skill guides you through creating professional AI-generated videos with a structured, iterative workflow:
