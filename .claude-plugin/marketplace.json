@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "gemini-video-producer",
-      "source": ".",
+      "source": "./",
       "description": "Create AI videos with Gemini - exceeds 8-second limit via scene chaining",
       "version": "1.0.0",
       "author": {
