@@ -172,29 +172,35 @@ Claude moves downloads to correct output paths
 | `browser_wait_for` | Wait for text/time |
 | `browser_take_screenshot` | Visual screenshot (for user review) |
 
-## Pipeline Modes
+## Pipeline Architecture
 
-### Video-First Mode (Recommended)
-Generate only the first keyframe, then generate videos sequentially.
-Each video's last frame becomes the next scene's start keyframe.
+### Scene and Segment Model
 
-```
-KF-A (generated) -> Scene 1 -> KF-B (extracted) -> Scene 2 -> KF-C (extracted)
-```
-
-**Pros:** Perfect visual continuity between scenes
-**Cons:** Less control over specific end poses
-
-### Keyframe-First Mode
-Generate all keyframes first, then generate videos between keyframe pairs.
+Videos are structured hierarchically:
+- **Scenes** contain one or more **segments**
+- Each **scene** has a generated starting keyframe (new visual context)
+- **Segments** within a scene chain via extracted frames (seamless continuity)
+- **Transitions** between scenes are applied programmatically (cut, fade, dissolve)
 
 ```
-KF-A ---------> Scene 1 <--------- KF-B
-KF-B ---------> Scene 2 <--------- KF-C
+Scene 1 (20 sec target → 3 segments)
+├── Keyframe: scene-01-start.png (GENERATED)
+├── Segment A (8 sec) → extract frame
+├── Segment B (8 sec) → extract frame
+└── Segment C (4 sec)
+
+[TRANSITION: fade/cut/dissolve]
+
+Scene 2 (8 sec target → 1 segment)
+├── Keyframe: scene-02-start.png (GENERATED - new visual context)
+└── Segment A (8 sec)
 ```
 
-**Pros:** Precise control over start and end frames
-**Cons:** Potential inconsistency between independently generated keyframes
+**Why this model:**
+- Scenes = narrative units (different camera, location, or perspective)
+- Segments = technical chunks needed due to 8-second generation limit
+- Keyframes generated per scene (not per segment) - establishes visual context
+- Transitions between scenes are real cinematic choices (not just frame chaining)
 
 ## Workflow Phases
 
@@ -276,40 +282,68 @@ Create `{output_dir}/scene-breakdown.md`:
 ## Overview
 - **Total Duration**: [X seconds]
 - **Number of Scenes**: [N]
+- **Segment Duration**: 8 seconds (Gemini limit)
 - **Video Type**: [promotional/narrative/educational/etc.]
 
 ---
 
-## Scenes
-
-### Scene 1: [Title]
-**Duration**: [X seconds]
+## Scene 1: [Title]
+**Duration**: [X seconds] → [ceil(X/8)] segments
 **Purpose**: [What this scene communicates]
+**Transition to Next**: [cut/fade/dissolve/wipe]
 
-**Visual Description**:
-[Detailed description of what appears]
+**Starting Keyframe**:
+[Detailed visual description for the generated keyframe that starts this scene]
 
-**Motion Description**:
-[Specific actions and movements]
+**Segments**:
+1. **Seg A** (0-8s): [Motion description for first 8 seconds]
+2. **Seg B** (8-16s): [Motion description for next 8 seconds]
+3. **Seg C** (16-Xs): [Motion description for remaining seconds]
 
-**Camera**: [static/tracking/pan/zoom]
-
-**Transition to Next**: [cut/fade/continuous]
+**Camera**: [static/tracking/pan/zoom/POV]
 
 ---
 
-### Scene 2: [Title]
-...
+## Scene 2: [Title]
+**Duration**: [X seconds] → [ceil(X/8)] segments
+**Purpose**: [What this scene communicates]
+**Transition to Next**: [null - last scene]
+
+**Starting Keyframe**:
+[Detailed visual description - this is a NEW scene so needs its own keyframe]
+
+**Segments**:
+1. **Seg A** (0-8s): [Motion description]
+
+**Camera**: [camera style]
+
+---
 ```
 
-**Scene Count Guidelines:**
-| Total Length | Scenes |
-|--------------|--------|
+**Planning Guidelines:**
+
+| When to Create a New Scene |
+|----------------------------|
+| Camera angle/perspective changes significantly |
+| Location or setting changes |
+| Time jump occurs |
+| Subject/focus changes |
+| You want a cinematic transition (fade, dissolve) |
+
+| When to Add Segments (Same Scene) |
+|-----------------------------------|
+| Continuous action exceeds 8 seconds |
+| Same camera perspective continues |
+| No narrative break needed |
+
+**Segment Calculation:** `segments_needed = ceil(scene_duration / 8)`
+
+| Scene Duration | Segments Needed |
+|----------------|-----------------|
 | 1-8 seconds | 1 |
-| 9-15 seconds | 2 |
-| 16-24 seconds | 3 |
+| 9-16 seconds | 2 |
+| 17-24 seconds | 3 |
 | 25-32 seconds | 4 |
-| 32+ seconds | 5+ |
 
 **CHECKPOINT:** Get user approval before proceeding.
 
@@ -317,11 +351,14 @@ Create `{output_dir}/scene-breakdown.md`:
 
 Create `{output_dir}/pipeline.json`:
 
-**Video-First Schema:**
+**Pipeline Schema v3.0:**
 ```json
 {
-  "version": "2.0",
+  "version": "3.0",
   "project_name": "project-name",
+  "config": {
+    "segment_duration": 8
+  },
   "metadata": {
     "created_at": "ISO timestamp",
     "philosophy_file": "philosophy.md",
@@ -344,25 +381,67 @@ Create `{output_dir}/pipeline.json`:
       }
     }
   },
-  "first_keyframe": {
-    "id": "KF-A",
-    "type": "character|landscape",
-    "prompt": "Detailed visual description...",
-    "output": "keyframes/KF-A.png",
-    "status": "pending"
-  },
   "scenes": [
     {
       "id": "scene-01",
-      "motion_prompt": "Motion description...",
-      "start_keyframe": "KF-A",
-      "output_video": "scene-01/video.mp4",
-      "output_keyframe": "keyframes/KF-B.png",
-      "status": "pending"
+      "title": "Scene Title",
+      "duration_target": 20,
+      "transition_to_next": "cut",
+      "first_keyframe": {
+        "prompt": "Detailed visual description for scene start...",
+        "output": "keyframes/scene-01-start.png",
+        "status": "pending"
+      },
+      "segments": [
+        {
+          "id": "seg-01-A",
+          "motion_prompt": "Motion description for first 8 seconds...",
+          "output_video": "scene-01/seg-A.mp4",
+          "status": "pending"
+        },
+        {
+          "id": "seg-01-B",
+          "motion_prompt": "Continuing motion for next 8 seconds...",
+          "output_video": "scene-01/seg-B.mp4",
+          "status": "pending"
+        },
+        {
+          "id": "seg-01-C",
+          "motion_prompt": "Final motion segment...",
+          "output_video": "scene-01/seg-C.mp4",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "scene-02",
+      "title": "Different Scene",
+      "duration_target": 8,
+      "transition_to_next": null,
+      "first_keyframe": {
+        "prompt": "New visual context description...",
+        "output": "keyframes/scene-02-start.png",
+        "status": "pending"
+      },
+      "segments": [
+        {
+          "id": "seg-02-A",
+          "motion_prompt": "Motion description...",
+          "output_video": "scene-02/seg-A.mp4",
+          "status": "pending"
+        }
+      ]
     }
   ]
 }
 ```
+
+**Schema Notes:**
+- `config.segment_duration`: Gemini's max video length (8 seconds)
+- `scenes[].duration_target`: Desired scene length → determines segment count: `ceil(duration / 8)`
+- `scenes[].transition_to_next`: Transition to apply before next scene (`cut`, `fade`, `dissolve`, `wipe`, or `null` for last scene)
+- `scenes[].first_keyframe`: Generated image to establish scene's visual context
+- `scenes[].segments[]`: Technical video chunks that chain seamlessly within the scene
 
 **CHECKPOINT:** Get user approval before proceeding.
 
@@ -387,75 +466,123 @@ For each asset in pipeline.json:
 
 **CHECKPOINT:** Review assets with VLM, get user approval.
 
-### Phase 5: First Keyframe (MCP)
-
-1. **Generate first keyframe image** using same MCP flow
-2. **Download and move** to keyframes/KF-A.png
-3. **Update pipeline.json** status
-
-**CHECKPOINT:** Review keyframe with VLM, get user approval.
-
-### Phase 6: Scene Execution (MCP)
+### Phase 5: Scene Keyframes Generation (MCP)
 
 For each scene in pipeline.json:
 
-1. **Start new chat**
-2. **Upload start keyframe:**
+1. **Generate scene's starting keyframe** using Gemini image generation
+2. **Download and move** to `keyframes/scene-XX-start.png`
+3. **Update pipeline.json** scene's `first_keyframe.status` to "completed"
+
+**Note:** Each scene needs its own generated keyframe because scenes represent distinct visual contexts (different camera, location, perspective, etc.)
+
+**CHECKPOINT:** Review all scene keyframes with VLM, get user approval.
+
+### Phase 6: Segment Execution (MCP)
+
+For each scene in pipeline.json:
+  For each segment in scene.segments:
+
+1. **Determine start frame:**
+   - If first segment of scene → use scene's `first_keyframe`
+   - Else → use extracted frame from previous segment
+
+2. **Start new chat**
+
+3. **Upload start frame:**
    - Click attach/upload button
-   - Use `browser_file_upload` with keyframe path
-3. **Type motion prompt:**
-   - "Create a video from this image: <motion_prompt>"
-4. **Wait for video generation** (can take 1-3 minutes)
-5. **Download video**
-6. **Move to correct path** (e.g., scene-01/video.mp4)
-7. **Extract last frame** for next scene's keyframe:
+   - Use `browser_file_upload` with appropriate frame path
+
+4. **Type motion prompt:**
+   - "Create a video from this image: <segment.motion_prompt>"
+
+5. **Wait for video generation** (60-180 seconds)
+
+6. **Download video**
+
+7. **Move to correct path** (e.g., `scene-01/seg-A.mp4`)
+
+8. **Extract last frame** (if not the last segment in this scene):
    ```powershell
-   ffmpeg -sseof -1 -i "scene-01/video.mp4" -frames:v 1 "keyframes/KF-B.png"
+   ffmpeg -sseof -1 -i "scene-01/seg-A.mp4" -frames:v 1 "scene-01/extracted/after-seg-A.png"
    ```
-8. **Update pipeline.json** status
+
+9. **Update pipeline.json** segment status to "completed"
+
+**Execution Flow Example:**
+```
+Scene 1 (3 segments):
+  seg-A: upload scene-01-start.png → generate → extract frame
+  seg-B: upload after-seg-A.png → generate → extract frame
+  seg-C: upload after-seg-B.png → generate → (no extraction, last segment)
+
+Scene 2 (1 segment):
+  seg-A: upload scene-02-start.png → generate → (no extraction, last segment)
+```
 
 **CHECKPOINT:** Get user approval on videos.
 
-### Phase 7: Final Concatenation
+### Phase 7: Final Concatenation with Transitions
 
-Concatenate all scene videos into a single output file:
+Two-step concatenation: first combine segments within each scene, then combine scenes with transitions.
 
-1. **Create file list** for ffmpeg:
-   ```powershell
-   # Create concat list
-   @"
-   file 'scene-01/video.mp4'
-   file 'scene-02/video.mp4'
-   file 'scene-03/video.mp4'
-   "@ | Out-File -FilePath "concat-list.txt" -Encoding ASCII
-   ```
+**Step 1: Concatenate segments within each scene (seamless)**
 
-2. **Concatenate videos** (ffmpeg or Python fallback):
-   ```powershell
-   # Option A: ffmpeg (if available)
-   ffmpeg -f concat -safe 0 -i "concat-list.txt" -c copy "output.mp4"
-   ```
-   ```python
-   # Option B: Python/OpenCV fallback
-   import cv2, os
-   base, scenes = '.', ['scene-01/video.mp4', 'scene-02/video.mp4', 'scene-03/video.mp4']
-   cap = cv2.VideoCapture(scenes[0])
-   fps, w, h = cap.get(cv2.CAP_PROP_FPS), int(cap.get(3)), int(cap.get(4))
-   cap.release()
-   out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-   for s in scenes:
-       cap = cv2.VideoCapture(s)
-       while True:
-           ret, f = cap.read()
-           if not ret: break
-           out.write(f)
-       cap.release()
-   out.release()
-   ```
+For each scene, concatenate its segments without transitions:
 
-3. **Clean up** concat-list.txt (optional)
+```powershell
+# Scene 1: combine segments
+@"
+file 'scene-01/seg-A.mp4'
+file 'scene-01/seg-B.mp4'
+file 'scene-01/seg-C.mp4'
+"@ | Out-File -FilePath "scene-01/concat.txt" -Encoding ASCII
 
-4. **Update pipeline.json** to mark project complete
+ffmpeg -f concat -safe 0 -i "scene-01/concat.txt" -c copy "scene-01/scene.mp4"
+```
+
+**Step 2: Combine scenes with transitions**
+
+Apply transitions between scenes based on `transition_to_next` in pipeline.json:
+
+| Transition | FFmpeg Implementation |
+|------------|----------------------|
+| `cut` | Simple concatenation (no filter) |
+| `fade` | `xfade=transition=fade:duration=0.5` |
+| `dissolve` | `xfade=transition=dissolve:duration=0.5` |
+| `wipe` | `xfade=transition=wipeleft:duration=0.5` |
+
+**For `cut` transitions only (simple case):**
+```powershell
+@"
+file 'scene-01/scene.mp4'
+file 'scene-02/scene.mp4'
+"@ | Out-File -FilePath "concat-list.txt" -Encoding ASCII
+
+ffmpeg -f concat -safe 0 -i "concat-list.txt" -c copy "output.mp4"
+```
+
+**For fade/dissolve/wipe transitions:**
+```powershell
+# Two scenes with fade (0.5 sec transition)
+# offset = scene1_duration - transition_duration
+ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" `
+  -filter_complex "[0:v][1:v]xfade=transition=fade:duration=0.5:offset=15.5[v]" `
+  -map "[v]" -c:v libx264 "output.mp4"
+
+# Three scenes with different transitions
+ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
+  -filter_complex "[0:v][1:v]xfade=transition=fade:duration=0.5:offset=15.5[v1]; `
+                   [v1][2:v]xfade=transition=dissolve:duration=0.5:offset=23.5[v2]" `
+  -map "[v2]" -c:v libx264 "output.mp4"
+```
+
+**Available xfade transitions:** `fade`, `dissolve`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`, `pixelize`, `radial`, `smoothleft`, `smoothright`
+
+**Step 3: Clean up and finalize**
+
+1. Remove intermediate files (concat.txt, scene.mp4 per scene) - optional
+2. Update pipeline.json to mark project complete
 
 **Final output:** `{output_dir}/output.mp4`
 
@@ -467,41 +594,51 @@ Concatenate all scene videos into a single output file:
 ├── style.json
 ├── scene-breakdown.md
 ├── pipeline.json
-├── output.mp4              <- FINAL CONCATENATED VIDEO
+├── output.mp4                      <- FINAL VIDEO (with transitions)
 ├── assets/
 │   ├── characters/
 │   └── backgrounds/
 ├── keyframes/
-│   ├── KF-A.png
-│   ├── KF-B.png (extracted from scene-01)
-│   └── KF-C.png (extracted from scene-02)
+│   ├── scene-01-start.png          <- Generated (scene 1 start)
+│   └── scene-02-start.png          <- Generated (scene 2 start)
 ├── scene-01/
-│   └── video.mp4
+│   ├── seg-A.mp4                   <- Segment videos
+│   ├── seg-B.mp4
+│   ├── seg-C.mp4
+│   ├── scene.mp4                   <- Concatenated scene (intermediate)
+│   └── extracted/                  <- Internal extracted frames
+│       ├── after-seg-A.png
+│       └── after-seg-B.png
 ├── scene-02/
-│   └── video.mp4
+│   ├── seg-A.mp4
+│   └── scene.mp4
 └── ...
 ```
 
+**Key Points:**
+- `keyframes/` contains only **generated** keyframes (one per scene)
+- `scene-XX/extracted/` contains **extracted** frames (internal, for segment chaining)
+- `scene-XX/scene.mp4` is the intermediate concatenated scene (before transitions)
+
 ## TodoWrite Template
 
-### Video-First Mode
 ```
-1. Ask user: Video-First or Keyframe-First?
-2. MCP: Navigate to Gemini, check login
-3. Create philosophy.md
-4. Create style.json
-5. Get user approval on philosophy
-6. Create scene-breakdown.md
-7. Get user approval on scene breakdown
-8. Create pipeline.json
-9. Get user approval on pipeline
-10. MCP: Generate assets, download, move to correct paths
-11. Review assets with VLM, get user approval
-12. MCP: Generate first keyframe
-13. Review first keyframe with VLM, get user approval
-14. MCP: Generate scene videos sequentially
-15. Get user approval on videos
-16. Concatenate all videos into output.mp4
+1. MCP: Navigate to Gemini, check login
+2. Create philosophy.md
+3. Create style.json
+4. Get user approval on philosophy
+5. Create scene-breakdown.md (with scenes and segments)
+6. Get user approval on scene breakdown
+7. Create pipeline.json (v3.0 with nested segments)
+8. Get user approval on pipeline
+9. MCP: Generate assets, download, move to correct paths
+10. Review assets with VLM, get user approval
+11. MCP: Generate scene keyframes (one per scene)
+12. Review keyframes with VLM, get user approval
+13. MCP: Generate segment videos (nested loop: scenes → segments)
+14. Get user approval on videos
+15. Concatenate segments within each scene
+16. Concatenate scenes with transitions into output.mp4
 17. Provide final summary
 ```
 
@@ -536,8 +673,12 @@ Move-Item -Path ".playwright-mcp/Gemini-Generated-Image-xyz.png" -Destination "o
 
 | Parameter | Value |
 |-----------|-------|
-| Video Duration | 5-8 seconds per generation |
+| Segment Duration | 8 seconds per generation (Gemini Veo limit) |
 | Image Resolution | Up to 1024x1024 |
 | Video Resolution | Up to 1080p |
 | Rate Limiting | ~2-3 generations per minute |
 | GPU Required | None (cloud-based) |
+
+**Key Terminology:**
+- **Scene** = A narrative/cinematic unit (any duration). Represents a continuous shot or distinct visual context. Each scene requires a generated starting keyframe.
+- **Segment** = A technical 8-second video chunk within a scene. Multiple segments chain together seamlessly via extracted frames to form longer scenes.
