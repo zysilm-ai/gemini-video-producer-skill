@@ -49,6 +49,44 @@ At workflow start, verify MCP Playwright is available:
 7. **ALWAYS use MCP Playwright** for Gemini interaction - no Python scripts
 8. **ALWAYS move downloads to correct locations** - files download to `.playwright-mcp/`, must be moved to pipeline output paths
 9. **ALWAYS review generated outputs using VLM** - view images after each stage, assess quality
+10. **ALWAYS ask about Approval Mode** at the very start (see below)
+
+## Approval Mode Selection (FIRST STEP)
+
+**At the very beginning of the workflow, ask the user to choose an approval mode:**
+
+Use AskUserQuestion with these options:
+- **"Manual approval"** - User approves each phase before proceeding (philosophy, scenes, assets, pipeline, keyframes, videos)
+- **"Automatic approval"** - LLM proceeds automatically, user only reviews final output
+
+| Mode | User Interaction | Best For |
+|------|------------------|----------|
+| **Manual** | Checkpoint at each phase | First-time projects, precise control, learning the workflow |
+| **Automatic** | Only final review | Trusted workflow, quick generation, batch production |
+
+**Store the selected mode** and apply it to all checkpoints throughout the workflow.
+
+### Standard Checkpoint Format (ALL PHASES)
+
+**Checkpoint behavior depends on the selected Approval Mode:**
+
+#### Manual Approval Mode (default)
+1. Show the output to user (file path or display content)
+2. Ask for approval using AskUserQuestion:
+   - **"Approve"** - Proceed to next step
+   - User can select **"Other"** to specify what needs to be changed
+3. **If user does not approve:**
+   - User specifies what to change
+   - Make the requested adjustments
+   - Show updated result → Ask again → Repeat until approved
+4. **Do NOT proceed to next phase until approved**
+
+#### Automatic Approval Mode
+1. Show the output to user (file path or display content)
+2. **LLM reviews the output using VLM capability** (for images/videos)
+3. If LLM assessment is positive → Proceed automatically
+4. If LLM detects issues → Fix and regenerate before proceeding
+5. **User only reviews final output at the end**
 
 ## Architecture
 
@@ -347,6 +385,108 @@ Create `{output_dir}/scene-breakdown.md`:
 
 **CHECKPOINT:** Get user approval before proceeding.
 
+### Phase 2.5: Asset Definition (REQUIRED)
+
+Create `{output_dir}/assets.json` to define reusable assets that maintain consistency across all scenes.
+
+**assets.json schema:**
+```json
+{
+  "characters": {
+    "<id>": {
+      "description": "Full physical description: hair, eyes, build, clothing, distinguishing features...",
+      "identity_ref": "assets/characters/<id>.png"
+    }
+  },
+  "backgrounds": {
+    "<id>": {
+      "description": "Environment description: setting, lighting, atmosphere...",
+      "ref_image": "assets/backgrounds/<id>.png"
+    }
+  },
+  "styles": {
+    "<id>": {
+      "description": "Visual style description: art style, color treatment, mood...",
+      "ref_image": "assets/styles/<id>.png"
+    }
+  },
+  "objects": {
+    "<id>": {
+      "description": "Recurring prop description: appearance, details...",
+      "ref_image": "assets/objects/<id>.png"
+    }
+  }
+}
+```
+
+**Asset Types:**
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| **Characters** | People/creatures - CRITICAL for identity consistency | "protagonist", "sidekick", "villain" |
+| **Backgrounds** | Locations/environments | "city_street", "temple_courtyard", "spaceship_bridge" |
+| **Styles** | Visual treatment references | "ghibli_pastoral", "noir_cinematic", "cyberpunk_neon" |
+| **Objects** | Recurring props/items | "magic_sword", "protagonist_car", "robot_companion" |
+
+**Character Asset Prompt Guidelines:**
+- Include full physical description (hair color/style, eye color, build, facial features)
+- Describe signature outfit and accessories
+- Mention "character sheet, A-pose, full body, white background" for clean references
+- Include multiple views if needed: "front view, side view, back view"
+
+**CHECKPOINT:** Get user approval before proceeding.
+
+---
+
+## Character Consistency Rules (CRITICAL)
+
+### The Character Drift Problem
+
+Without proper character references, AI video models cause "identity drift" - clothing colors change, styles shift, characters become unrecognizable across scenes. The drift is **cumulative**: by Scene 4-5, characters may look completely different from Scene 1.
+
+### When to Include Character References
+
+**CRITICAL RULE:** Include character references for ANY scene where the character is visible, even partially.
+
+| What's Visible | Include Character Reference? | Example |
+|----------------|------------------------------|---------|
+| Full body | **YES** | Wide shot of character walking |
+| Upper body only | **YES** | Medium shot conversation |
+| **Hands only** | **YES** | Close-up of hands holding object |
+| **Clothing only (no face)** | **YES** | Back view of character running |
+| Character's belongings | Optional | Close-up of character's bag |
+| No character elements | NO | Landscape, building exterior |
+
+**Common Mistake:** Close-up of hands without character reference → clothing color/style becomes inconsistent.
+
+### Scene Type Classification
+
+Every scene must be classified as one of:
+- **`character`**: ANY part of a character is visible (even hands, clothing, or back view)
+- **`landscape`**: No character elements visible at all
+
+### Keyframe Type Selection (CRITICAL)
+
+| Scene Type | Transition | Keyframe Type | Why |
+|------------|------------|---------------|-----|
+| `character` | ANY | **ALWAYS generated** | Must re-anchor character identity |
+| `landscape` | cut/fade/dissolve | generated | New visual context |
+| `landscape` | continuous | extracted OK | No identity to preserve |
+
+**RULE:** NEVER use extracted keyframes for character scenes. Even for "continuous" transitions, character scenes MUST use generated keyframes with character references.
+
+### Reference Chain Rules
+
+| Asset Type | Chain Behavior |
+|------------|----------------|
+| **Character Identity** | ALWAYS use original asset from `assets/characters/` (never chain from keyframes) |
+| **Background** | Can chain from previous scene's background for continuity |
+| **Style** | ALWAYS apply with style asset reference |
+
+**Key Rule:** Never chain keyframes as character references - always use original character assets.
+
+---
+
 ### Phase 3: Pipeline Generation (REQUIRED)
 
 Create `{output_dir}/pipeline.json`:
@@ -366,17 +506,31 @@ Create `{output_dir}/pipeline.json`:
     "scene_breakdown_file": "scene-breakdown.md"
   },
   "assets": {
+    "characters": {
+      "<id>": {
+        "prompt": "Full physical description with character sheet styling...",
+        "output": "assets/characters/<id>.png",
+        "status": "pending"
+      }
+    },
     "backgrounds": {
       "<id>": {
-        "prompt": "Detailed description...",
+        "prompt": "Environment description with atmosphere...",
         "output": "assets/backgrounds/<id>.png",
         "status": "pending"
       }
     },
-    "characters": {
+    "styles": {
       "<id>": {
-        "prompt": "Detailed description...",
-        "output": "assets/characters/<id>.png",
+        "prompt": "Visual style reference description...",
+        "output": "assets/styles/<id>.png",
+        "status": "pending"
+      }
+    },
+    "objects": {
+      "<id>": {
+        "prompt": "Recurring prop description...",
+        "output": "assets/objects/<id>.png",
         "status": "pending"
       }
     }
@@ -385,10 +539,14 @@ Create `{output_dir}/pipeline.json`:
     {
       "id": "scene-01",
       "title": "Scene Title",
+      "scene_type": "character",
       "duration_target": 20,
       "transition_to_next": "cut",
       "first_keyframe": {
+        "type": "generated",
         "prompt": "Detailed visual description for scene start...",
+        "characters": ["protagonist"],
+        "background": "location_id",
         "output": "keyframes/scene-01-start.png",
         "status": "pending"
       },
@@ -415,11 +573,14 @@ Create `{output_dir}/pipeline.json`:
     },
     {
       "id": "scene-02",
-      "title": "Different Scene",
+      "title": "Landscape Scene",
+      "scene_type": "landscape",
       "duration_target": 8,
       "transition_to_next": null,
       "first_keyframe": {
-        "prompt": "New visual context description...",
+        "type": "generated",
+        "prompt": "Environment establishing shot...",
+        "background": "location_id",
         "output": "keyframes/scene-02-start.png",
         "status": "pending"
       },
@@ -438,10 +599,20 @@ Create `{output_dir}/pipeline.json`:
 
 **Schema Notes:**
 - `config.segment_duration`: Gemini's max video length (8 seconds)
+- `assets`: Defines reusable assets (characters, backgrounds, styles, objects) - mirrors assets.json
+- `scenes[].scene_type`: **NEW** - `"character"` or `"landscape"` (determines keyframe rules)
 - `scenes[].duration_target`: Desired scene length → determines segment count: `ceil(duration / 8)`
 - `scenes[].transition_to_next`: Transition to apply before next scene (`cut`, `fade`, `dissolve`, `wipe`, or `null` for last scene)
-- `scenes[].first_keyframe`: Generated image to establish scene's visual context
+- `scenes[].first_keyframe.type`: **NEW** - `"generated"` or `"extracted"` (see Character Consistency Rules)
+- `scenes[].first_keyframe.characters`: **NEW** - Array of character asset IDs to reference (REQUIRED if scene_type is "character")
+- `scenes[].first_keyframe.background`: **NEW** - Optional background asset ID
 - `scenes[].segments[]`: Technical video chunks that chain seamlessly within the scene
+
+**Keyframe Type Rules:**
+| Scene Type | Keyframe Type | Character References |
+|------------|---------------|----------------------|
+| `character` | ALWAYS `"generated"` | REQUIRED - array of character IDs |
+| `landscape` | `"generated"` or `"extracted"` | Not needed |
 
 **CHECKPOINT:** Get user approval before proceeding.
 
@@ -586,29 +757,116 @@ ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
 
 **Final output:** `{output_dir}/output.mp4`
 
+---
+
+## Motion Prompt Structure
+
+### I2V Motion Prompt Format
+
+Use this structured format for video motion prompts:
+
+```
+[SUBJECT] [ACTION VERB] [BODY PART DETAILS], [ENVIRONMENTAL INTERACTION], camera [CAMERA MOVEMENT]
+```
+
+**Example:** "soldier sprints through trench, legs driving forward, rifle bouncing against chest, mud splashing from boots, camera tracking from behind at shoulder height"
+
+### I2V Motion Rules
+
+1. **Separate subject motion from camera motion** - describe both explicitly
+2. **Describe physical body movements** - "legs pumping", "arms swinging", not just "running"
+3. **Include environmental interaction** - "boots splashing through mud", "hair flowing in wind"
+4. **Avoid POV/first-person** - I2V struggles with perspective-based motion
+5. **Use motion verbs** - "sprinting" not "in motion"
+6. **One action per segment** - don't overload with multiple complex actions in 8 seconds
+
+### Positional Language for Multi-Character Scenes
+
+When multiple characters appear, use explicit positioning to maintain spatial consistency:
+
+| Position | Phrase |
+|----------|--------|
+| Left side | "On the left:" |
+| Right side | "On the right:" |
+| Center | "In the center:" |
+| Foreground | "In the foreground:" |
+| Background | "In the background:" |
+
+**Example:**
+"On the left: samurai in red armor raises katana. On the right: ninja in black crouches defensively. In the background: temple burning with orange flames. Camera slowly pushes in from wide shot."
+
+### Motion Quality Vocabulary
+
+| Type | Words |
+|------|-------|
+| **Speed** | glacially, gradually, steadily, quickly, explosively |
+| **Smooth** | fluid, graceful, seamless, flowing |
+| **Sharp** | precise, snappy, crisp, sudden |
+| **Heavy** | weighted, powerful, forceful, impactful |
+| **Light** | delicate, airy, subtle, ethereal |
+
+---
+
+## VLM Review Checklists
+
+### For Character Assets
+- [ ] Appearance matches description (hair, eyes, clothing, distinguishing features)
+- [ ] Pose is neutral and usable as reference (A-pose or T-pose)
+- [ ] Style matches production philosophy
+- [ ] No artifacts, distortions, or extra limbs
+- [ ] Background is clean (white/neutral)
+
+### For Keyframes
+- [ ] Characters match their asset references (identity preserved)
+- [ ] Character positions match prompt descriptions
+- [ ] Background/environment matches philosophy
+- [ ] Lighting is consistent with style.json
+- [ ] Composition allows for intended motion
+- [ ] No text or watermarks in frame
+
+### For Videos
+- [ ] Motion matches prompt description
+- [ ] Characters remain consistent throughout (no identity drift)
+- [ ] No sudden jumps, flickers, or artifacts
+- [ ] Camera movement is smooth
+- [ ] Environmental interactions look natural
+
+---
+
 ## Output Directory Structure
 
 ```
 {output_dir}/
-├── philosophy.md
-├── style.json
-├── scene-breakdown.md
-├── pipeline.json
-├── output.mp4                      <- FINAL VIDEO (with transitions)
+├── philosophy.md              # Production philosophy
+├── style.json                 # Style configuration
+├── scene-breakdown.md         # Scene planning document
+├── assets.json                # Asset definitions (NEW)
+├── pipeline.json              # Execution pipeline with all prompts
+├── output.mp4                 # FINAL VIDEO (with transitions)
+│
 ├── assets/
-│   ├── characters/
-│   └── backgrounds/
+│   ├── characters/            # Character reference sheets
+│   │   └── protagonist.png
+│   ├── backgrounds/           # Environment references
+│   │   └── location.png
+│   ├── styles/                # Visual style references (NEW)
+│   │   └── style_anchor.png
+│   └── objects/               # Recurring props (NEW)
+│       └── item.png
+│
 ├── keyframes/
-│   ├── scene-01-start.png          <- Generated (scene 1 start)
-│   └── scene-02-start.png          <- Generated (scene 2 start)
+│   ├── scene-01-start.png     # Generated (scene 1 start)
+│   └── scene-02-start.png     # Generated (scene 2 start)
+│
 ├── scene-01/
-│   ├── seg-A.mp4                   <- Segment videos
+│   ├── seg-A.mp4              # Segment videos
 │   ├── seg-B.mp4
 │   ├── seg-C.mp4
-│   ├── scene.mp4                   <- Concatenated scene (intermediate)
-│   └── extracted/                  <- Internal extracted frames
+│   ├── scene.mp4              # Concatenated scene (intermediate)
+│   └── extracted/             # Internal extracted frames
 │       ├── after-seg-A.png
 │       └── after-seg-B.png
+│
 ├── scene-02/
 │   ├── seg-A.mp4
 │   └── scene.mp4
@@ -616,31 +874,60 @@ ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
 ```
 
 **Key Points:**
+- `assets.json` defines all reusable assets (characters, backgrounds, styles, objects)
+- `assets/` folders mirror the asset types in assets.json
 - `keyframes/` contains only **generated** keyframes (one per scene)
 - `scene-XX/extracted/` contains **extracted** frames (internal, for segment chaining)
 - `scene-XX/scene.mp4` is the intermediate concatenated scene (before transitions)
 
-## TodoWrite Template
+## TodoWrite Templates
+
+At the START of the workflow, create the appropriate todo list based on selected approval mode:
+
+### Manual Approval Mode
 
 ```
-1. MCP: Navigate to Gemini, check login
-2. Create philosophy.md
-3. Create style.json
-4. Get user approval on philosophy
+1. Ask user to select approval mode (Manual/Automatic)
+2. MCP: Navigate to Gemini, check login
+3. Create philosophy.md and style.json
+4. Get user approval on production philosophy
 5. Create scene-breakdown.md (with scenes and segments)
 6. Get user approval on scene breakdown
-7. Create pipeline.json (v3.0 with nested segments)
-8. Get user approval on pipeline
-9. MCP: Generate assets, download, move to correct paths
-10. Review assets with VLM, get user approval
-11. MCP: Generate scene keyframes (one per scene)
-12. Review keyframes with VLM, get user approval
+7. Create assets.json (characters, backgrounds, styles, objects)
+8. Get user approval on asset definitions
+9. Create pipeline.json (v3.0 schema with scene_type, characters)
+10. Get user approval on pipeline.json
+11. MCP: Generate assets, VLM review, get user approval
+12. MCP: Generate scene keyframes, VLM review, get user approval
 13. MCP: Generate segment videos (nested loop: scenes → segments)
 14. Get user approval on videos
 15. Concatenate segments within each scene
 16. Concatenate scenes with transitions into output.mp4
 17. Provide final summary
 ```
+
+### Automatic Approval Mode
+
+```
+1. Ask user to select approval mode (Manual/Automatic)
+2. MCP: Navigate to Gemini, check login
+3. Create philosophy.md and style.json
+4. Create scene-breakdown.md (with scenes and segments)
+5. Create assets.json (characters, backgrounds, styles, objects)
+6. Create pipeline.json (v3.0 schema with scene_type, characters)
+7. MCP: Generate assets, VLM review (auto-proceed if good)
+8. MCP: Generate scene keyframes, VLM review (auto-proceed if good)
+9. MCP: Generate segment videos (nested loop: scenes → segments)
+10. Concatenate segments within each scene
+11. Concatenate scenes with transitions into output.mp4
+12. Present final output to user for review
+```
+
+**Key Differences:**
+- Manual mode has explicit user approval checkpoints at each phase
+- Automatic mode relies on VLM review and only shows final output to user
+- Both modes use VLM to review generated assets and keyframes
+- LLM should fix and regenerate if VLM detects issues in either mode
 
 ## File Download Handling
 

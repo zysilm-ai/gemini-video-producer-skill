@@ -175,6 +175,85 @@ Character position remains center frame throughout.
 - "circles clockwise around"
 - "descends diagonally toward lower right"
 
+## Structured Motion Prompts for I2V
+
+### The Motion Prompt Formula
+
+For Image-to-Video generation, use this structured format:
+
+```
+[SUBJECT] [ACTION VERB] [BODY PART DETAILS], [ENVIRONMENTAL INTERACTION], camera [CAMERA MOVEMENT]
+```
+
+This structure ensures you describe:
+1. **Who/what** is moving
+2. **How** they're moving (specific body mechanics)
+3. **Interaction** with the environment
+4. **Camera** behavior (often overlooked!)
+
+### Examples
+
+**Action Scene:**
+```
+warrior lunges forward, right arm thrusting sword ahead, left arm pulled back for balance,
+cape billowing behind, dust kicking up from boots, camera tracking from side at waist height
+```
+
+**Subtle Movement:**
+```
+woman turns head slowly to the left, eyes shifting first then chin following,
+hair swaying gently with movement, soft shadows moving across face,
+camera holds steady on medium close-up
+```
+
+**Environmental Interaction:**
+```
+child runs through tall grass, arms brushing against stalks,
+grass parting and swaying in wake, pollen catching sunlight,
+camera following at child's height
+```
+
+**Character Emotion:**
+```
+man's expression shifts from confusion to understanding,
+eyebrows rising, lips parting slightly, shoulders relaxing downward,
+warm light gradually brightening on face, camera slowly pushes in
+```
+
+### I2V-Specific Rules
+
+1. **Separate subject motion from camera motion** - Describe both explicitly
+2. **Describe physical body movements** - "legs pumping", "arms swinging", not just "running"
+3. **Include environmental interaction** - "boots splashing through mud", "hair flowing in wind"
+4. **Avoid POV/first-person** - I2V models struggle with perspective-based motion
+5. **Use motion verbs** - "sprinting" not "in motion"
+6. **One action per segment** - Don't overload with multiple complex actions in 8 seconds
+7. **Match the keyframe** - If character is standing, don't describe them sitting
+
+### Positional Language for Multi-Character Scenes
+
+When multiple characters appear, use explicit positioning to maintain spatial consistency:
+
+| Position | Phrase | Use When |
+|----------|--------|----------|
+| Left side | "On the left:" | Character positioned in left third |
+| Right side | "On the right:" | Character positioned in right third |
+| Center | "In the center:" | Character positioned in middle |
+| Foreground | "In the foreground:" | Element closer to camera |
+| Background | "In the background:" | Element further from camera |
+
+**Multi-Character Example:**
+```
+On the left: samurai in red armor raises katana overhead, muscles tensing.
+On the right: ninja in black crouches defensively, arms raised to block.
+In the background: temple burning with orange flames, smoke rising.
+Camera slowly pushes in from wide shot to medium.
+```
+
+This explicit positioning helps maintain character placement across regenerations and prevents confusion about who is doing what.
+
+---
+
 ## Common Mistakes
 
 ### Mistake 1: Ambiguous Action

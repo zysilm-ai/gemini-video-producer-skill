@@ -309,6 +309,64 @@ python scripts/veo_video.py \
 }
 ```
 
+## Style Assets
+
+### What Are Style Assets?
+
+Style assets are reference images that exemplify the visual treatment you want to apply consistently across all generations. They serve as "style anchors" that help maintain visual coherence.
+
+### Creating Style Reference Images
+
+1. **Generate a style anchor** - Create an image that perfectly captures your visual vision
+2. **Save as style asset** - Store in `assets/styles/<style_name>.png`
+3. **Define in assets.json** - Document the style for reference
+4. **Reference in prompts** - Include style descriptions in all generation prompts
+
+### When to Use Style Assets
+
+| Scenario | Use Style Asset? | Why |
+|----------|------------------|-----|
+| Consistent anime style across all scenes | **YES** | Ensures art style doesn't drift |
+| Specific color grading/treatment | **YES** | Maintains mood and palette |
+| Matching existing footage or brand | **YES** | Creates visual continuity |
+| Generic realistic photography | Optional | Less critical for photorealism |
+| Multiple distinct visual styles in one project | **YES (multiple)** | One style asset per distinct look |
+
+### Style Asset in assets.json
+
+```json
+{
+  "styles": {
+    "ghibli_pastoral": {
+      "description": "Studio Ghibli style - soft watercolor backgrounds, warm natural lighting, gentle color palette with greens and earth tones, painterly quality, nostalgic atmosphere, detailed environmental art",
+      "ref_image": "assets/styles/ghibli_pastoral.png"
+    },
+    "noir_cinematic": {
+      "description": "Film noir aesthetic - high contrast black and white with occasional color accent, dramatic shadows, venetian blind lighting, rain-slicked streets, moody atmosphere",
+      "ref_image": "assets/styles/noir_cinematic.png"
+    }
+  }
+}
+```
+
+### Style Asset Prompt Tips
+
+When generating a style anchor:
+- Focus on **environment/atmosphere** rather than characters
+- Include **lighting examples** that represent your vision
+- Show **color palette** through the image composition
+- Demonstrate **texture quality** (painterly, clean, grainy, etc.)
+
+**Example Style Anchor Prompt:**
+```
+A lush forest clearing at golden hour, soft dappled sunlight filtering through leaves,
+painterly watercolor aesthetic with visible brush strokes, warm earth tones and soft greens,
+atmospheric haze in the distance, Studio Ghibli inspired, no characters,
+establishing shot composition, nostalgic and peaceful mood
+```
+
+---
+
 ## Maintaining Consistency Across Sessions
 
 1. **Save your style configuration** in version control
@@ -316,3 +374,4 @@ python scripts/veo_video.py \
 3. **Create a "style anchor" keyframe** that exemplifies your vision
 4. **Review all outputs** against the Production Philosophy
 5. **Update philosophy** if vision evolves (then regenerate affected assets)
+6. **Reference style assets** in every generation prompt for consistency
