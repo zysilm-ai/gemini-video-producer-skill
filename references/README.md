@@ -15,6 +15,7 @@ This directory contains reference documentation for the Gemini Video Producer Sk
 | **Phase 2** | `camera-movements.md` | Plan camera movements |
 | **Phase 2** | `continuity-rules.md` | Plan continuity |
 | **Phase 2** | `templates/scene-breakdown.md` | Create scene-breakdown.md |
+| **Phase 2.5** | `asset-prompts.md` | Write professional asset prompts |
 | **Phase 3** | `pipeline-schema.md` | Create pipeline.json |
 | **Phases 4-6** | `vlm-checklists.md` | Review generated content |
 | **Troubleshooting** | `troubleshooting.md` | Resolve issues |
@@ -34,6 +35,7 @@ This directory contains reference documentation for the Gemini Video Producer Sk
 | `camera-movements.md` | ~100 | 11 camera movement types with genre guidance |
 | `genre-presets.md` | ~220 | 6 genre presets with full configuration JSON |
 | `continuity-rules.md` | ~150 | 180-degree rule, screen direction, continuity checklist |
+| `asset-prompts.md` | ~350 | Professional asset prompt writing (model sheets, prop sheets, environments, styles) |
 | `pipeline-schema.md` | ~200 | v4.0 schema definition with examples |
 | `vlm-checklists.md` | ~150 | Review checklists for assets, keyframes, videos |
 

@@ -184,13 +184,19 @@ Claude concatenates videos to output.mp4
 
 ### Phase 2.5: Asset Definition (REQUIRED)
 
+**Before starting this phase, read:**
+- `references/asset-prompts.md` - Professional asset prompt writing guide
+
 **Create:** `{output_dir}/assets.json`
 
-Define reusable assets:
-- **Characters** - People/creatures for identity consistency
-- **Backgrounds** - Locations/environments
-- **Styles** - Visual treatment references
-- **Objects** - Recurring props/items
+Define reusable assets using professional reference formats:
+
+| Asset Type | Format | Key Requirements |
+|------------|--------|------------------|
+| **Characters** | Character Model Sheet (turnaround) | Multiple views (front, 3/4, side, back), T-pose/A-pose, neutral expression, white background |
+| **Backgrounds** | Environment Concept Art | No characters visible, establishes location/mood, composition space for subjects |
+| **Styles** | Style Reference Image | No characters, demonstrates color palette/lighting/texture, captures visual treatment |
+| **Objects** | Prop Reference Sheet | Multiple views, detail callouts, scale reference with human silhouette |
 
 **CHECKPOINT:** Get user approval before proceeding.
 
