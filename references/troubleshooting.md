@@ -48,7 +48,7 @@ Common issues and solutions for AI video production.
 ### Issue: Subject distortion during rotation
 **Symptoms**: Face becomes distorted when character turns
 **Causes**:
-- Veo doesn't have information about unseen angles
+- Model doesn't have information about unseen angles
 - Rotation angle too extreme
 
 **Solutions**:
@@ -98,7 +98,7 @@ Common issues and solutions for AI video production.
 ### Issue: Audio doesn't match video
 **Symptoms**: Generated audio is wrong mood or out of sync
 **Causes**:
-- Veo's audio generation is best-effort
+- Audio generation is best-effort
 - No audio cues in prompt
 
 **Solutions**:

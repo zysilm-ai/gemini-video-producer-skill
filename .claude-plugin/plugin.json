@@ -1,6 +1,6 @@
 {
   "name": "gemini-video-producer",
-  "description": "AI video production using Gemini via MCP Playwright. Create videos of any length by chaining scenes.",
+  "description": "AI video production using Google Whisk via MCP Playwright. Create videos of any length by chaining scenes.",
   "version": "1.0.0",
   "author": {
     "name": "zysilm-ai"

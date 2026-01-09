@@ -202,33 +202,39 @@ Convert your philosophy into a machine-readable format:
 }
 ```
 
-## Using Style Configuration
+## Using Style Configuration with Whisk
 
 ### With Image Generation
 
-```bash
-python scripts/gemini_image.py \
-  --prompt "Elena stands at the edge of the forest, looking toward distant mountains" \
-  --style-ref outputs/style.json \
-  --reference character-refs/elena-front.png \
-  --output outputs/scene-01/keyframe-start.png
+When generating images in Whisk, apply your style configuration by:
+
+1. **Upload style reference** to the **Stil** (Style) slot in Whisk
+2. **Include style descriptors** in your text prompt based on style.json
+3. **Use character reference** in the **Motiv** (Subject) slot for consistency
+
+**Example workflow:**
+```
+1. Upload assets/styles/ghibli_pastoral.png to Style slot
+2. Upload assets/characters/elena.png to Subject slot
+3. Upload assets/backgrounds/forest.png to Scene slot (optional)
+4. Type prompt: "Elena stands at the edge of the forest, looking toward distant mountains,
+   soft painterly style, warm earth tones, golden hour lighting"
+5. Generate image
 ```
 
-The script reads the style configuration and enhances your prompt with:
-- Art style descriptors
-- Color palette guidance
-- Lighting specifications
-- Motion quality hints
+The style.json configuration guides your prompt writing:
+- Art style descriptors → Include in every prompt
+- Color palette guidance → Reference in scene descriptions
+- Lighting specifications → Describe in prompts
+- Motion quality hints → Apply to video prompts
 
 ### With Video Generation
 
-```bash
-python scripts/veo_video.py \
-  --prompt "Elena walks slowly into the forest, sunlight filtering through leaves" \
-  --start-frame outputs/scene-01/keyframe-start.png \
-  --style-ref outputs/style.json \
-  --output outputs/scene-01/video.mp4
-```
+Whisk animates generated images. Apply style consistency by:
+
+1. Generate keyframe image with style reference applied
+2. Animate the keyframe using Whisk's video generation
+3. Include motion descriptors in animation prompt based on style.json
 
 ## Style Templates by Video Type
 

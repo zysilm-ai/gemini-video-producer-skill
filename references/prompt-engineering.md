@@ -1,6 +1,6 @@
 # Prompt Engineering Guide for AI Video Production
 
-This guide covers advanced prompt writing techniques for both image generation (Gemini) and video generation (Veo).
+This guide covers advanced prompt writing techniques for both image generation and video generation using Google Whisk.
 
 ## Prompt Anatomy
 
@@ -286,7 +286,7 @@ This explicit positioning helps maintain character placement across regeneration
 
 ## Negative Prompting
 
-Veo and Gemini don't use traditional negative prompts. Instead, use explicit constraints:
+Whisk doesn't use traditional negative prompts. Instead, use explicit constraints:
 
 **Instead of**: `negative_prompt: "blurry, low quality, distorted"`
 **Use**: "Sharp focus, high quality, anatomically correct proportions. Avoid any blur or distortion."

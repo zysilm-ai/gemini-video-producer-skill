@@ -1,25 +1,25 @@
 ---
 name: ai-video-producer
 description: >
-  AI video production workflow using Gemini via MCP Playwright browser automation.
+  AI video production workflow using Google Whisk via MCP Playwright browser automation.
   Creates any video type: promotional, educational, narrative, social media,
   animations, game trailers, music videos, product demos, and more. Use when
   users want to create videos with AI, need help with video storyboarding,
   keyframe generation, or video prompt writing. Follows a philosophy-first
   approach: establish visual style and production philosophy, then execute
   scene by scene with user feedback at each stage. Requires MCP Playwright
-  server and a Google account with Gemini access.
+  server and a Google account with Whisk access (labs.google).
 allowed-tools: Read, Write, Edit, Glob, AskUserQuestion, TodoWrite, mcp__playwright__*
 ---
 
-# AI Video Producer (MCP Edition)
+# AI Video Producer (Whisk Edition)
 
-Create professional AI-generated videos through a structured, iterative workflow using Gemini via MCP Playwright.
+Create professional AI-generated videos through a structured, iterative workflow using Google Whisk via MCP Playwright.
 
 ## Prerequisites & Setup
 
 **Required:**
-- Google account with Gemini access
+- Google account with access to Google Labs (labs.google)
 - Internet connection
 
 **MCP Playwright:** If not installed, run automatically:
@@ -46,7 +46,7 @@ At workflow start, verify MCP Playwright is available:
 4. **ALWAYS break videos into multiple scenes** - minimum 2 scenes for any video over 5 seconds
 5. **ALWAYS ask user for approval** before proceeding to the next phase
 6. **NEVER generate without a complete pipeline.json** - plan ALL prompts first, execute second
-7. **ALWAYS use MCP Playwright** for Gemini interaction - no Python scripts
+7. **ALWAYS use MCP Playwright** for Whisk interaction - no Python scripts
 8. **ALWAYS move downloads to correct locations** - files download to `.playwright-mcp/`, must be moved to pipeline output paths
 9. **ALWAYS review generated outputs using VLM** - view images after each stage, assess quality
 10. **ALWAYS ask about Approval Mode** at the very start (see below)
@@ -93,7 +93,7 @@ Use AskUserQuestion with these options:
 ```
 Claude reads pipeline.json
     |
-Claude -> MCP Playwright -> Gemini Web Interface
+Claude -> MCP Playwright -> Google Whisk (labs.google/fx/tools/whisk)
     |
 Claude updates pipeline.json status
     |
@@ -102,101 +102,156 @@ Claude moves downloads to correct output paths
 
 **Benefits:**
 - Self-healing: Claude adapts to UI changes by semantic understanding
-- No brittle CSS selectors that break when Gemini updates
+- No brittle CSS selectors that break when Whisk updates
 - Simpler codebase - no Python Playwright code to maintain
 - Real-time adaptation to page state
+
+## Whisk Reference Slots
+
+Whisk uses three reference image slots that map to our asset types:
+
+| Whisk Slot | German Label | Our Asset Type | Purpose |
+|------------|--------------|----------------|---------|
+| **Subject** | Motiv | Characters | Person/creature reference for identity |
+| **Scene** | Szene | Backgrounds | Location/environment reference |
+| **Style** | Stil | Styles | Visual treatment reference |
+
+This is a perfect match for our asset-based workflow!
 
 ## MCP Playwright Operations Reference
 
 ### Login Check & Flow
 
 ```
-1. Navigate to Gemini:
-   mcp__playwright__browser_navigate(url="https://gemini.google.com/app")
+1. Navigate to Whisk:
+   mcp__playwright__browser_navigate(url="https://labs.google/fx/tools/whisk")
 
 2. Take snapshot to check state:
    mcp__playwright__browser_snapshot()
 
-3. If cookie consent appears:
-   - Click "Accept all" button
+3. If cookie consent appears (German: "Auf labs.google/fx werden..."):
+   - Click "Ausblenden" (Hide) or accept button
 
 4. Check if logged in:
-   - Look for textbox "Prompt hier eingeben" or similar chat input
-   - If present: logged in
+   - Look for "Tool aufrufen" button on landing page
+   - Or look for profile image button if already in tool
    - If login form appears: inform user to log in manually
 
-5. If not logged in:
+5. If on landing page:
+   - Click "Tool aufrufen" (Access tool) button to enter the workspace
+
+6. If not logged in:
    - Inform user: "Please log in to your Google account in the browser window"
-   - Wait for login: mcp__playwright__browser_wait_for(text="Prompt", time=120)
+   - Wait for login: mcp__playwright__browser_wait_for(text="Whisk", time=120)
 ```
 
-### Image Generation
+### Image Generation (with Reference Slots)
+
+Whisk generates images using up to three reference slots plus a text prompt:
 
 ```
-1. Ensure on Gemini chat page (navigate if needed)
+1. Ensure in Whisk workspace:
+   - URL should be: labs.google/fx/.../whisk/project
+   - If on landing page, click "Tool aufrufen"
 
-2. Type prompt into chat:
+2. Expand the reference panel (if collapsed):
+   - Click "Bilder hinzufügen" (Add images) button to show slots
+
+3. Upload reference images to appropriate slots:
+
+   a. For CHARACTER reference (Motiv/Subject slot):
+      - Click on the "person" slot area
+      - Click "Bild hochladen" (Upload image) button
+      - mcp__playwright__browser_file_upload(paths=["assets/characters/<id>.png"])
+
+   b. For BACKGROUND reference (Szene/Scene slot):
+      - Click on the "location_on" slot area
+      - Click "Bild hochladen" (Upload image) button
+      - mcp__playwright__browser_file_upload(paths=["assets/backgrounds/<id>.png"])
+
+   c. For STYLE reference (Stil/Style slot):
+      - Click on the "stylus_note" slot area
+      - Click "Bild hochladen" (Upload image) button
+      - mcp__playwright__browser_file_upload(paths=["assets/styles/<id>.png"])
+
+4. Type the generation prompt:
    mcp__playwright__browser_type(
      element="Prompt input textbox",
      ref="<textbox_ref>",
-     text="Generate an image: <prompt>",
-     submit=true
+     text="<detailed_prompt_description>",
+     submit=false
    )
 
-3. Wait for generation (15-60 seconds):
+5. Click generate button:
+   mcp__playwright__browser_click(element="Prompt senden", ref="<ref>")
+
+6. Wait for generation (15-60 seconds):
    mcp__playwright__browser_wait_for(time=30)
    mcp__playwright__browser_snapshot()  # Check if image appeared
 
-4. Download the image:
-   - Find download button in snapshot (usually "Download" or download icon)
+7. Download the generated image:
+   - Right-click on generated image or find download button
    - mcp__playwright__browser_click(element="Download button", ref="<ref>")
-   - Wait for download: mcp__playwright__browser_wait_for(textGone="downloading")
+   - Wait for download
 
-5. Move file to correct location:
+8. Move file to correct location:
    - Downloaded to: .playwright-mcp/<filename>.png
    - Move to: <pipeline_output_path>
    - Use PowerShell: Move-Item -Path "source" -Destination "dest"
 
-6. Update pipeline.json status to "completed"
+9. Update pipeline.json status to "completed"
+
+10. Clear slots for next generation:
+    - Click X on each reference slot to remove
+    - Or start new project
 ```
 
-### Video Generation
+### Video Generation (Animate Image)
+
+Whisk animates existing images to create videos:
 
 ```
-1. Start new chat or continue existing:
-   - Click "New chat" button if needed
+1. First, generate or have a keyframe image ready
 
-2. For Image-to-Video (I2V):
-   a. Upload start frame:
-      - Click upload/attach button
-      - mcp__playwright__browser_file_upload(paths=["<keyframe_path>"])
+2. Navigate to video mode:
+   - Click "videocam_auto" button in toolbar
 
-   b. Type video prompt:
-      mcp__playwright__browser_type(
-        element="Prompt input",
-        ref="<ref>",
-        text="Create a video: <motion_prompt>",
-        submit=true
-      )
+3. Find the generated image in the gallery:
+   - Images appear in the workspace after generation
+   - Click on the image you want to animate
 
-3. For Text-to-Video (T2V):
-   - Just type the prompt without uploading images
+4. Look for animation/video option:
+   - Find "Animate" or video generation button
+   - Click to start video generation
 
-4. Wait for video generation (60-180 seconds):
+5. Wait for video generation (60-180 seconds):
    mcp__playwright__browser_wait_for(time=60)
-   mcp__playwright__browser_snapshot()  # Check progress
+   mcp__playwright__browser_snapshot()
 
-5. Download the video:
-   - Find video element and download button
-   - Click download
+6. Download the video:
+   - Find video in the video gallery (videocam_auto mode)
+   - Click download button
    - Wait for completion
 
-6. Move to correct output path
+7. Move to correct output path:
+   - Downloaded to: .playwright-mcp/<filename>.mp4
+   - Move to: scene-XX/seg-X.mp4
 
-7. Extract last frame if needed for next scene:
-   - Use ffmpeg or similar to extract last frame
-   - Save as next keyframe
+8. Extract last frame for next segment:
+   ```powershell
+   ffmpeg -sseof -1 -i "scene-01/seg-A.mp4" -frames:v 1 "scene-01/extracted/after-seg-A.png"
+   ```
+
+9. Update pipeline.json status
 ```
+
+### Whisk-Specific Tips
+
+- **Reference slots are optional**: You can use 0, 1, 2, or all 3 slots
+- **Character consistency**: Always use the same character asset in the Subject slot
+- **Style consistency**: Upload your style anchor to the Style slot for consistent look
+- **Clear slots between generations**: Remove references when generating different content
+- **Check video mode**: Videos appear in a separate gallery (videocam_auto button)
 
 ### Key MCP Tools
 
@@ -245,7 +300,7 @@ Scene 2 (8 sec target → 1 segment)
 ### Phase 0: Setup Check
 
 ```
-1. Navigate to https://gemini.google.com/app
+1. Navigate to https://labs.google/fx/tools/whisk
 2. Handle cookie consent if needed
 3. Verify login status
 4. If not logged in, guide user through login
@@ -320,7 +375,7 @@ Create `{output_dir}/scene-breakdown.md`:
 ## Overview
 - **Total Duration**: [X seconds]
 - **Number of Scenes**: [N]
-- **Segment Duration**: 8 seconds (Gemini limit)
+- **Segment Duration**: 8 seconds (Whisk video limit)
 - **Video Type**: [promotional/narrative/educational/etc.]
 
 ---
@@ -598,7 +653,7 @@ Create `{output_dir}/pipeline.json`:
 ```
 
 **Schema Notes:**
-- `config.segment_duration`: Gemini's max video length (8 seconds)
+- `config.segment_duration`: Whisk's max video length (8 seconds)
 - `assets`: Defines reusable assets (characters, backgrounds, styles, objects) - mirrors assets.json
 - `scenes[].scene_type`: **NEW** - `"character"` or `"landscape"` (determines keyframe rules)
 - `scenes[].duration_target`: Desired scene length → determines segment count: `ceil(duration / 8)`
@@ -620,7 +675,7 @@ Create `{output_dir}/pipeline.json`:
 
 For each asset in pipeline.json:
 
-1. **Navigate to Gemini** (if not already there)
+1. **Navigate to Whisk** (if not already there)
 2. **Generate image:**
    - Type: "Generate an image: <asset_prompt>"
    - Submit and wait for generation
@@ -641,7 +696,7 @@ For each asset in pipeline.json:
 
 For each scene in pipeline.json:
 
-1. **Generate scene's starting keyframe** using Gemini image generation
+1. **Generate scene's starting keyframe** using Whisk image generation
 2. **Download and move** to `keyframes/scene-XX-start.png`
 3. **Update pipeline.json** scene's `first_keyframe.status` to "completed"
 
@@ -888,7 +943,7 @@ At the START of the workflow, create the appropriate todo list based on selected
 
 ```
 1. Ask user to select approval mode (Manual/Automatic)
-2. MCP: Navigate to Gemini, check login
+2. MCP: Navigate to Whisk, check login
 3. Create philosophy.md and style.json
 4. Get user approval on production philosophy
 5. Create scene-breakdown.md (with scenes and segments)
@@ -910,7 +965,7 @@ At the START of the workflow, create the appropriate todo list based on selected
 
 ```
 1. Ask user to select approval mode (Manual/Automatic)
-2. MCP: Navigate to Gemini, check login
+2. MCP: Navigate to Whisk, check login
 3. Create philosophy.md and style.json
 4. Create scene-breakdown.md (with scenes and segments)
 5. Create assets.json (characters, backgrounds, styles, objects)
@@ -942,25 +997,28 @@ At the START of the workflow, create the appropriate todo list based on selected
 ```powershell
 # Example
 New-Item -ItemType Directory -Force -Path "output/project/assets/backgrounds"
-Move-Item -Path ".playwright-mcp/Gemini-Generated-Image-xyz.png" -Destination "output/project/assets/backgrounds/battlefield.png" -Force
+Move-Item -Path ".playwright-mcp/whisk-generated-xyz.png" -Destination "output/project/assets/backgrounds/battlefield.png" -Force
 ```
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Cookie consent page | Click "Accept all" button |
-| Not logged in | Guide user to log in manually |
+| Cookie consent page | Click "Ausblenden" (Hide) button |
+| Not logged in | Guide user to log in to Google account manually |
+| On landing page | Click "Tool aufrufen" to enter workspace |
 | Generation stuck | Wait longer, check snapshot for progress |
-| Download not working | Try clicking download button again |
+| Download not working | Try right-clicking image or find download button |
 | Element ref not found | Take new snapshot, refs change on page update |
 | Rate limited | Wait 1-2 minutes between generations |
+| Reference slot not clearing | Click X button on slot or start new project |
+| Video not appearing | Check video gallery (videocam_auto button) |
 
 ## Technical Specs
 
 | Parameter | Value |
 |-----------|-------|
-| Segment Duration | 8 seconds per generation (Gemini Veo limit) |
+| Segment Duration | 8 seconds per generation (Whisk video limit) |
 | Image Resolution | Up to 1024x1024 |
 | Video Resolution | Up to 1080p |
 | Rate Limiting | ~2-3 generations per minute |

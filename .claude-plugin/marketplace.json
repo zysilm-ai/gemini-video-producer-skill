@@ -4,14 +4,14 @@
     "name": "zysilm-ai"
   },
   "metadata": {
-    "description": "AI video production using Gemini via MCP Playwright automation",
+    "description": "AI video production using Google Whisk via MCP Playwright automation",
     "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "gemini-video-producer",
       "source": "./",
-      "description": "Create AI videos with Gemini - exceeds 8-second limit via scene chaining",
+      "description": "Create AI videos with Google Whisk - exceeds 8-second limit via scene chaining",
       "version": "1.0.0",
       "author": {
         "name": "zysilm-ai"
@@ -19,7 +19,7 @@
       "homepage": "https://github.com/zysilm-ai/gemini-video-producer-skill",
       "repository": "https://github.com/zysilm-ai/gemini-video-producer-skill",
       "license": "MIT",
-      "keywords": ["video", "gemini", "ai", "mcp", "playwright", "veo"],
+      "keywords": ["video", "whisk", "ai", "mcp", "playwright", "google-labs"],
       "category": "content-creation"
     }
   ]
