@@ -116,27 +116,109 @@ Whisk uses three reference image slots that map to our asset types:
 | **Scene** | Szene | Backgrounds | Location/environment reference |
 | **Style** | Stil | Styles | Visual treatment reference |
 
-## Architecture
+## How It Works
+
+### Architecture Overview
 
 ```
-Claude reads pipeline.json (v4.0 with shot types, genre, continuity)
-    |
-Claude -> MCP Playwright -> Google Whisk (labs.google/fx/tools/whisk)
-    |
-Claude updates pipeline.json status
-    |
-Claude verifies shot type and continuity via VLM
-    |
-Claude moves downloads to correct output paths
-    |
-Claude concatenates videos to output.mp4
+┌─────────────────────────────────────────────────────────────────┐
+│                        SKILL.md (~360 lines)                    │
+│                     Core workflow instructions                   │
+│                                                                 │
+│  Phase 1 ──► Read: references/genre-presets.md                  │
+│              Read: references/templates/philosophy.md           │
+│                                                                 │
+│  Phase 2 ──► Read: references/shot-types.md                     │
+│              Read: references/shot-progressions.md              │
+│              Read: references/camera-movements.md               │
+│              Read: references/continuity-rules.md               │
+│                                                                 │
+│  Phase 3 ──► Read: references/pipeline-schema.md                │
+│                                                                 │
+│  Phase 4-6 ► Read: references/vlm-checklists.md                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    MCP Playwright Browser                        │
+│                                                                 │
+│  Claude ──► browser_navigate ──► Google Whisk                   │
+│         ──► browser_snapshot ──► Page state                     │
+│         ──► browser_click    ──► UI interaction                 │
+│         ──► browser_type     ──► Prompt input                   │
+│         ──► browser_upload   ──► Reference images               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      pipeline.json (v4.0)                        │
+│                                                                 │
+│  • genre_preset: action/horror/comedy/drama/anime/documentary   │
+│  • shot_progression: establishing-to-intimate/action-sequence   │
+│  • continuity: screen_direction, axis_of_action                 │
+│  • segments[].shot_type + camera_movement                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Modular Reference Loading
+
+The skill uses a **modular architecture** to optimize LLM context and attention:
+
+1. **Core Instructions** (`SKILL.md` ~360 lines) - Always loaded, contains workflow phases
+2. **Reference Files** (loaded on-demand) - Detailed documentation loaded only when needed
+
+**Why this approach?**
+- **Better LLM focus**: Smaller context = better attention on current task
+- **On-demand loading**: Reference data loaded only at relevant phases
+- **Maintainability**: Each reference file can be updated independently
+- **Token efficiency**: ~78% reduction in base context size
+
+### Workflow Execution
+
+```
+User Request
+    │
+    ▼
+Phase 0: Setup Check
+    │ Navigate to Whisk, verify login
+    ▼
+Phase 1: Production Philosophy
+    │ Read: genre-presets.md, templates/philosophy.md
+    │ Create: philosophy.md, style.json
+    ▼
+Phase 2: Scene Breakdown
+    │ Read: shot-types.md, shot-progressions.md,
+    │       camera-movements.md, continuity-rules.md
+    │ Create: scene-breakdown.md
+    ▼
+Phase 3: Pipeline Generation
+    │ Read: pipeline-schema.md
+    │ Create: pipeline.json (v4.0)
+    ▼
+Phase 4-6: MCP Execution
+    │ Read: vlm-checklists.md
+    │ Generate: assets → keyframes → videos
+    │ Verify: shot types, continuity via VLM
+    ▼
+Phase 7: Final Concatenation
+    │ ffmpeg: segments → scenes → output.mp4
+    ▼
+Final Output
+```
+
+### Self-Healing Browser Automation
+
+Claude uses **semantic understanding** rather than brittle CSS selectors:
+
+```
+❌ Old approach: document.querySelector('.btn-primary-xyz')
+✅ MCP approach: browser_click(element="Generate button", ref="<snapshot_ref>")
 ```
 
 **Benefits:**
-- Self-healing: Claude adapts to UI changes by semantic understanding
-- Professional framing: Shot types guide composition
-- Visual consistency: Continuity rules prevent jarring cuts
-- No brittle CSS selectors that break when Whisk updates
+- Adapts to UI changes automatically
+- No code maintenance when Whisk updates
+- Works across different languages (German UI labels supported)
 
 ## Supported Video Types
 
@@ -218,14 +300,25 @@ output/{project-name}/
 
 ```
 gemini-video-producer-skill/
-├── SKILL.md                   # Claude Code skill instructions (v4.0)
+├── SKILL.md                   # Core skill instructions (~360 lines)
 ├── README.md                  # This file
 ├── assets/
 │   └── example-style.json     # Style template with genre preset
 ├── references/
-│   ├── prompt-engineering.md  # Shot type modifiers, genre prompts
-│   ├── style-systems.md       # Genre presets, style guidance
-│   └── troubleshooting.md     # Issues including continuity problems
+│   ├── README.md              # Reference file index
+│   ├── shot-types.md          # 8 professional shot type definitions
+│   ├── shot-progressions.md   # 4 shot progression patterns
+│   ├── camera-movements.md    # 11 camera movement types
+│   ├── genre-presets.md       # 6 genre preset configurations
+│   ├── continuity-rules.md    # 180° rule, screen direction
+│   ├── vlm-checklists.md      # Review checklists for VLM
+│   ├── pipeline-schema.md     # v4.0 pipeline schema definition
+│   ├── prompt-engineering.md  # Prompt writing guidance
+│   ├── style-systems.md       # Visual style configuration
+│   ├── troubleshooting.md     # Detailed troubleshooting
+│   └── templates/
+│       ├── philosophy.md      # philosophy.md + style.json templates
+│       └── scene-breakdown.md # scene-breakdown.md template
 └── output/                    # Generated projects
     ├── battlefield-fpv/       # Action POV example (v4.0)
     └── tokyo-pigeon-incident/ # Anime comedy example (v4.0)
@@ -247,8 +340,8 @@ MIT License - See LICENSE
 
 ## Acknowledgments
 
+### Tools & Platforms
 - [Claude Code](https://claude.ai/code) - AI coding assistant
 - [OpenCode](https://opencode.ai) - Open source AI coding agent
-- [MCP Playwright](https://github.com/anthropics/mcp-playwright) - Browser automation via MCP
+- [MCP Playwright](https://github.com/microsoft/playwright-mcp) - Browser automation via Model Context Protocol
 - [Google Whisk](https://labs.google/fx/tools/whisk) - AI image and video generation
-- Academic film production research - Shot types, continuity rules, genre conventions
