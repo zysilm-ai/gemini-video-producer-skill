@@ -181,6 +181,72 @@ export GOOGLE_API_KEY="your-api-key-here"
 3. Build in flexibility with ambient/transition scenes
 4. Some scenes can be extended with speed adjustments in editing
 
+---
+
+## Shot Type Issues (v4.0)
+
+### Issue: Shot type doesn't match specification
+**Symptoms**: Wide shot looks like medium, close-up doesn't fill frame
+**Solutions**:
+1. Add explicit shot type modifiers to prompt: "wide establishing shot, full environment visible"
+2. Include composition notes: "subject small in frame, environment dominant"
+3. Regenerate with stronger shot type language
+4. Check if keyframe composition allows for intended shot type
+
+### Issue: Camera movement not executing correctly
+**Symptoms**: Push-in doesn't push in, pan goes wrong direction
+**Solutions**:
+1. Be explicit about direction: "camera slowly pushes in toward subject"
+2. Include speed modifier: "gradual push-in over 8 seconds"
+3. Avoid conflicting motion: don't combine complex subject motion with complex camera motion
+4. Simplify: some camera moves work better than others in AI video
+
+### Issue: Shot progression feels wrong
+**Symptoms**: Cuts feel jarring, emotional beats don't land
+**Solutions**:
+1. Follow standard progressions: wide → medium → close-up for intimacy
+2. Use action-sequence pattern for fights: wide → medium → close-up → wide
+3. Review shot type breakdown table in scene-breakdown.md
+4. Consider if shot type matches narrative purpose
+
+---
+
+## Continuity Issues (v4.0)
+
+### Issue: Screen direction reversal
+**Symptoms**: Character faces left in one shot, right in next shot
+**Solutions**:
+1. Plan screen direction in scene-breakdown.md
+2. Include direction in prompts: "character faces right, looking toward frame right"
+3. Use neutral shots (character facing camera) to reset direction
+4. Review keyframes together before generating videos
+
+### Issue: 180-degree rule violation
+**Symptoms**: Spatial relationships confusing, characters seem to swap positions
+**Solutions**:
+1. Establish axis of action in scene continuity notes
+2. Keep camera on one side of the imaginary line between subjects
+3. For intentional crossing, use a neutral shot (subject facing camera) to reset
+4. Review OTS shots - ensure consistent shoulder placement
+
+### Issue: Spatial inconsistency / "teleportation"
+**Symptoms**: Character positions don't match between segments
+**Solutions**:
+1. Extract end frame from previous segment as reference
+2. Include position descriptions in prompts: "character on left side of frame"
+3. Maintain consistent environmental elements (props, furniture)
+4. Review extracted frames before generating next segment
+
+### Issue: Lighting direction inconsistency
+**Symptoms**: Shadows flip direction between segments
+**Solutions**:
+1. Establish lighting direction in philosophy.md: "key light from upper left"
+2. Include lighting in prompts: "dramatic rim lighting from the right"
+3. Match lighting direction to keyframe when chaining segments
+4. Consider if scene transition warrants lighting change (time passing)
+
+---
+
 ## Quality Improvement Tips
 
 ### Increasing Visual Quality
@@ -201,6 +267,13 @@ export GOOGLE_API_KEY="your-api-key-here"
 3. Generate all keyframes before any videos
 4. Review all keyframes together for consistency
 5. Make style adjustments globally, not per-scene
+
+### Shot Type and Continuity Quality (v4.0)
+1. Plan shot types during scene breakdown, not during execution
+2. Use shot progression patterns (establishing-to-intimate, action-sequence, etc.)
+3. Fill out continuity notes for every scene
+4. Review screen direction map before generating
+5. Check 180-degree rule for dialogue/interaction scenes
 
 ## When to Start Over
 

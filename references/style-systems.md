@@ -315,6 +315,64 @@ Whisk animates generated images. Apply style consistency by:
 }
 ```
 
+---
+
+## Genre Presets (v4.0)
+
+In v4.0, you can reference a genre preset in pipeline.json that applies consistent visual language, shot preferences, and pacing guidelines automatically. The genre preset influences style.json creation.
+
+### Available Genre Presets
+
+| Genre | Visual Style | Shot Preferences | Camera Movement |
+|-------|-------------|------------------|-----------------|
+| `action` | High contrast, gritty, rim lighting | Wide geography, medium action, close-up impact | Track, handheld, steadicam |
+| `horror` | Cold, desaturated, deep shadows | Medium tension, close-up fear, POV stalker | Push-in, static holds |
+| `comedy` | Warm, bright, vibrant | Medium workhorse, two-shot, reaction close-ups | Static, motivated by gags |
+| `drama` | Naturalistic, filmic grain | Medium/close-up, OTS dialogue, ECU emotion | Push-in, steadicam |
+| `anime` | Vibrant, cel-shaded, clean lines | All types, ECU eyes, wide world-building | Push-in, pull-out, pans |
+| `documentary` | Naturalistic, available light | Medium/wide, OTS interviews, insert B-roll | Static, handheld |
+
+### Using Genre Presets with Style Configuration
+
+When creating style.json, reference the genre preset for guidance:
+
+```json
+{
+  "project_name": "Project Name",
+  "genre_preset": "action",
+  "visual_style": {
+    "art_style": "high contrast, gritty, dramatic",
+    "color_palette": {
+      "primary": ["desaturated earth tones"],
+      "secondary": ["cool shadows"],
+      "accent": ["warm explosion highlights"]
+    },
+    "lighting": "dramatic rim lighting, hard shadows"
+  },
+  "motion_language": {
+    "movement_quality": "dynamic, powerful, impactful",
+    "pacing": "fast rhythmic cuts (2-4s)",
+    "camera_style": "tracking, handheld, steadicam"
+  }
+}
+```
+
+### Genre-Specific Style Tips
+
+**Action**: Embrace contrast. Cool shadows + warm highlights. Gritty texture. Motion blur is acceptable.
+
+**Horror**: Desaturation creates dread. Use motivated light sources (candles, flashlights). Deep blacks. Grain adds unease.
+
+**Comedy**: Keep it bright and clear. Audiences need to see timing and reactions. Avoid shadows that obscure faces.
+
+**Drama**: Naturalistic but not flat. Motivated lighting that supports emotion. Subtle film grain. Shallow DOF for intimacy.
+
+**Anime**: Clean lines, flat color fills with dramatic rim lights. Saturated but not garish. Stylized shadows acceptable.
+
+**Documentary**: Authentic look. Available light where possible. Sharp detail. Avoid over-stylization.
+
+---
+
 ## Style Assets
 
 ### What Are Style Assets?

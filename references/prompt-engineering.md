@@ -293,3 +293,108 @@ Whisk doesn't use traditional negative prompts. Instead, use explicit constraint
 
 **Instead of**: `negative_prompt: "text, watermark, logo"`
 **Use**: "Clean image without any text, watermarks, or logos visible."
+
+---
+
+## Shot Type Prompt Modifiers (v4.0)
+
+Use these prompt modifiers to achieve professional shot types. Add these phrases to your prompts based on the `shot_type` field in pipeline.json.
+
+### Shot Type Modifier Library
+
+| Shot Type | Primary Modifier | Alternative Modifiers |
+|-----------|------------------|----------------------|
+| `wide` | "wide establishing shot, full environment visible" | "extreme wide shot", "environment dominant, subject small in frame" |
+| `medium` | "medium shot, waist-up framing" | "mid-shot showing upper body", "character from waist up" |
+| `close-up` | "close-up shot, face filling frame" | "tight shot on face", "emotional close-up" |
+| `extreme-close-up` | "extreme close-up on [feature]" | "macro shot", "[feature] filling entire frame" |
+| `pov` | "first-person POV, character's viewpoint" | "subjective camera", "POV shot, hands at frame edges" |
+| `over-shoulder` | "over-the-shoulder shot, shoulder in foreground" | "OTS framing", "looking past [A] at [B]" |
+| `two-shot` | "two-shot framing, both characters visible" | "dual subject composition", "[A] and [B] in frame together" |
+| `insert` | "insert shot of [object]" | "detail shot", "close-up cutaway to [object]" |
+
+### Camera Movement Modifier Library
+
+| Movement | Prompt Modifier | Notes |
+|----------|-----------------|-------|
+| `static` | "camera holds steady" | Good for dialogue, tension |
+| `push-in` | "camera slowly pushes in" | Builds intensity |
+| `pull-out` | "camera pulls back to reveal" | Shows context |
+| `pan-left` | "camera pans left" | Following action |
+| `pan-right` | "camera pans right" | Following action |
+| `track-left` | "camera tracks left" | Bodily movement |
+| `track-right` | "camera tracks right" | Bodily movement |
+| `crane-up` | "camera cranes up" | Reveals, power |
+| `crane-down` | "camera descends" | Intimacy |
+| `handheld` | "handheld camera feel" | Urgency, documentary |
+| `steadicam` | "smooth steadicam movement" | Fluid following |
+
+### Genre-Specific Prompt Modifiers
+
+Add these to your prompts based on the `genre_preset` field:
+
+**Action:**
+```
+dynamic action shot, high energy, dramatic lighting, motion blur on fast movement, dust and debris particles
+```
+
+**Horror:**
+```
+ominous atmosphere, deep shadows, unsettling mood, something wrong in the frame, dread-inducing lighting
+```
+
+**Comedy:**
+```
+comedic timing, bright cheerful lighting, exaggerated expression, clear staging for gag, reaction shot emphasis
+```
+
+**Drama:**
+```
+cinematic drama, emotional lighting, intimate framing, naturalistic atmosphere, character-focused composition
+```
+
+**Anime:**
+```
+anime illustration style, clean lines, vibrant colors, dramatic anime lighting, expressive character animation
+```
+
+**Documentary:**
+```
+documentary style, naturalistic lighting, authentic atmosphere, observational camera, real-world setting
+```
+
+### Combining Shot Type + Camera + Genre
+
+Build complete prompts by combining modifiers:
+
+**Example: Action wide shot with tracking camera**
+```
+wide establishing shot showing the entire battlefield,
+soldiers visible small in frame against smoke-filled sky,
+camera tracks right following explosion debris,
+dynamic action shot, dramatic lighting, dust particles
+```
+
+**Example: Horror close-up with slow push-in**
+```
+close-up shot, face filling frame,
+character's eyes wide with terror, sweat on brow,
+camera slowly pushes in,
+ominous atmosphere, deep shadows, dread-inducing lighting
+```
+
+**Example: Comedy two-shot with static camera**
+```
+two-shot framing, both characters visible at table,
+camera holds steady for comedic timing,
+bright cheerful lighting, clear staging for visual gag
+```
+
+### Shot Type Best Practices
+
+1. **Match shot type to narrative purpose**: Wide shots orient, close-ups emote
+2. **Progress through shots**: Use `shot_progression` patterns (wide → medium → close-up)
+3. **Combine with camera movement**: Static close-ups for dialogue, tracking for action
+4. **Genre consistency**: Horror avoids comfortable framing, comedy uses clear staging
+5. **Composition notes matter**: Add rule of thirds, headroom guidance
+6. **Screen direction**: Include facing/movement direction for continuity

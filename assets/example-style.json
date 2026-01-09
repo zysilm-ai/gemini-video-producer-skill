@@ -1,6 +1,7 @@
 {
   "project_name": "Example Video Project",
-  "version": "1.0",
+  "version": "4.0",
+  "genre_preset": "drama",
   "visual_style": {
     "art_style": "Cinematic realism with vibrant colors",
     "color_palette": {
@@ -30,6 +31,11 @@
     "camera_style": "steady tracking, occasional slow push-in",
     "avoid": ["shaky cam", "rapid unmotivated cuts", "excessive zoom"]
   },
+  "shot_preferences": {
+    "preferred_shots": ["medium", "close-up", "over-shoulder"],
+    "emphasis_shots": ["extreme-close-up", "two-shot"],
+    "default_progression": "establishing-to-intimate"
+  },
   "subjects": {
     "main_character": {
       "type": "character",
@@ -53,7 +59,8 @@
     "maintain": [
       "consistent lighting direction within scenes",
       "character appearance and proportions",
-      "color grade across all scenes"
+      "color grade across all scenes",
+      "screen direction unless intentionally crossing"
     ]
   }
 }
