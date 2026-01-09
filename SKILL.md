@@ -80,6 +80,120 @@ Claude moves downloads to correct output paths
 Claude concatenates videos to output.mp4
 ```
 
+## Sub-Agent Architecture (Context Management)
+
+This skill uses **sub-agents** for efficient memory management. Each generation task runs in a fresh context, preventing memory bloat and improving reliability.
+
+### Why Sub-Agents?
+
+| Problem | Solution |
+|---------|----------|
+| Context fills with irrelevant history | Each sub-agent starts fresh |
+| Long workflows cause errors | Isolated tasks, isolated failures |
+| Memory of asset A not needed for asset B | Stateless execution |
+| Parallel generation impossible | Independent sub-agents can run in parallel |
+
+### Agent Responsibilities
+
+| Phase | Agent Type | Context Needed |
+|-------|------------|----------------|
+| **0-3** (Planning) | Main Agent | User intent, iteration, approval |
+| **4** (Assets) | Sub-agents (parallel) | Just asset prompt + MCP instructions |
+| **5+6** (Videos) | Sub-agents (per segment) | Just scene data + asset paths |
+| **7** (Concat) | Main Agent | Just file paths |
+
+### Sub-Agent Workflow
+
+```
+Main Agent (planning phases)
+    │
+    ├── pipeline.json complete
+    │
+    ▼
+┌─────────────────────────────────────────────────────┐
+│  PHASE 4: PARALLEL ASSET GENERATION                 │
+│                                                     │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │
+│  │ Asset 1 │ │ Asset 2 │ │ Asset 3 │ │ Asset N │  │
+│  │SubAgent │ │SubAgent │ │SubAgent │ │SubAgent │  │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘  │
+│       │           │           │           │        │
+│       ▼           ▼           ▼           ▼        │
+│   [success]   [success]   [retry→ok]  [success]   │
+└─────────────────────────────────────────────────────┘
+    │
+    ├── All assets complete
+    │
+    ▼
+┌─────────────────────────────────────────────────────┐
+│  PHASE 5+6: VIDEO GENERATION (sequential per scene) │
+│                                                     │
+│  Scene 1: seg-A ──► seg-B ──► seg-C                │
+│  Scene 2: seg-A ──► seg-B                          │
+│  (seg-B depends on seg-A for frame extraction)     │
+└─────────────────────────────────────────────────────┘
+    │
+    ▼
+Main Agent (concatenation)
+```
+
+### Sub-Agent Instructions
+
+Sub-agents receive complete, self-contained instructions:
+
+- **Asset Generation**: See `references/subagents/asset-generation.md`
+- **Video Generation**: See `references/subagents/video-generation.md`
+
+### Spawning Sub-Agents
+
+**For Asset Generation (Parallel):**
+```
+Spawn multiple sub-agents simultaneously, one per asset:
+
+Sub-agent prompt template:
+"Generate an asset using Google Whisk.
+
+ ASSET INFO:
+ - Type: {asset_type}
+ - Prompt: {prompt}
+ - Output Path: {output_path}
+
+ INSTRUCTIONS: [content from references/subagents/asset-generation.md]
+
+ AUTO-RETRY: Up to 2 retries on failure.
+ Return: status, output_path"
+```
+
+**For Video Generation (Sequential per scene):**
+```
+Spawn one sub-agent per segment, wait for completion before next:
+
+Sub-agent prompt template:
+"Generate keyframe and video using Google Whisk.
+
+ SEGMENT INFO:
+ - Scene: {scene_id}, Segment: {segment_id}
+ - Keyframe Prompt: {keyframe_prompt}
+ - Motion Prompt: {motion_prompt}
+ - Character Assets: {character_paths}
+ - Background Asset: {background_path}
+ - Keyframe Output: {keyframe_output_path}
+ - Video Output: {video_output_path}
+ - Previous Video: {previous_video_path} (for seg-B+)
+
+ INSTRUCTIONS: [content from references/subagents/video-generation.md]
+
+ VLM REVIEW: Required for keyframe selection.
+ AUTO-RETRY: Up to 2 retries on failure.
+ Return: status, keyframe_path, video_path"
+```
+
+### Error Handling
+
+- **Auto-retry**: Sub-agents retry up to 2 times on failure
+- **Failure reporting**: Sub-agent returns clear error message
+- **Main agent action**: Update pipeline.json, log error, continue or stop based on approval mode
+
 ## Whisk Reference Slots
 
 | Whisk Slot | German Label | Our Asset Type | Purpose |
@@ -100,29 +214,129 @@ Claude concatenates videos to output.mp4
 5. If not logged in: Inform user to log in manually
 ```
 
-### Image Generation
+### Asset Image Generation
 
 ```
 1. Expand reference panel: Click "Bilder hinzufügen"
-2. Upload references to appropriate slots (Subject/Scene/Style)
+2. Upload references to appropriate slots (Subject/Scene/Style) if needed
 3. Type prompt: mcp__playwright__browser_type(element="Prompt input", ref="<ref>", text="<prompt>")
 4. Generate: mcp__playwright__browser_click(element="Prompt senden", ref="<ref>")
-5. Wait: mcp__playwright__browser_wait_for(time=30)
-6. Download image and move to pipeline output path
-7. Update pipeline.json status
+5. Wait: mcp__playwright__browser_wait_for(time=15)
+6. Whisk generates 2 images - review both
+7. Download chosen image and move to pipeline output path
+8. Update pipeline.json status
 ```
 
-### Video Generation
+### Combined Keyframe + Video Generation (RECOMMENDED)
+
+**This is the efficient workflow for scene generation with asset references for consistency.**
+
+**TESTED WORKFLOW - Follow these exact MCP operations:**
 
 ```
-1. Navigate to video mode: Click "videocam_auto" button
-2. Select image to animate
-3. Click animate/generate button
-4. Wait: mcp__playwright__browser_wait_for(time=60)
-5. Download video and move to pipeline output path
-6. Extract last frame: ffmpeg -sseof -1 -i "seg-A.mp4" -frames:v 1 "extracted/after-seg-A.png"
-7. Update pipeline.json status
+STEP 1: START FRESH SESSION
+===========================
+Navigate to Whisk and start a new chat for each scene:
+1. mcp__playwright__browser_navigate(url="https://labs.google/fx/tools/whisk")
+2. mcp__playwright__browser_snapshot() - verify page loaded
+3. If needed, click "Neuer Chat" to clear previous context
+
+STEP 2: UPLOAD ASSET REFERENCES (Critical for consistency!)
+===========================================================
+Check pipeline.json for scene's required assets and upload each:
+
+For CHARACTER (Subject/Motiv slot):
+a. Take snapshot to find the Subject slot with heading "Motiv"
+b. Click on the slot area (look for image placeholder under "Motiv")
+c. Click "Bild" or image upload option when it appears
+d. Use browser_file_upload with absolute path to character asset
+   Example: mcp__playwright__browser_file_upload(paths=["D:/Project/.../assets/characters/zelda.jpg"])
+
+For BACKGROUND (Scene/Szene slot):
+a. Click on the Scene slot area under heading "Szene"
+b. Click "Bild" or image upload option
+c. Use browser_file_upload with absolute path to background asset
+   Example: mcp__playwright__browser_file_upload(paths=["D:/Project/.../assets/backgrounds/spring_of_power.jpg"])
+
+For STYLE (Style/Stil slot) - Optional:
+a. Click on the Style slot area under heading "Stil"
+b. Upload style reference if specified in pipeline
+
+STEP 3: GENERATE KEYFRAMES
+==========================
+1. Take snapshot to find the prompt textbox
+2. Type KEYFRAME prompt: mcp__playwright__browser_type(
+     element="Prompt textbox",
+     ref="<textbox_ref>",
+     text="<first_keyframe.prompt from pipeline.json>"
+   )
+3. Click "Prompt senden" button to generate
+4. Wait for generation: mcp__playwright__browser_wait_for(time=20)
+5. Whisk generates 2 keyframe options
+
+STEP 4: VLM REVIEW & SELECTION
+==============================
+1. Take screenshot: mcp__playwright__browser_take_screenshot()
+2. Use VLM to assess BOTH keyframes:
+   - Character consistency with uploaded references
+   - Background consistency with scene reference
+   - Composition and shot type match
+   - Overall quality and style consistency
+3. Decide which keyframe (left or right) is better
+4. Note: Left keyframe typically has lower ref numbers
+
+STEP 5: ANIMATE TO VIDEO
+========================
+1. Take snapshot to find "Animieren" button on CHOSEN keyframe
+2. Click "Animieren" (Animate) button on the better keyframe
+3. Animation view opens with a new textbox asking "Was für eine Animation möchten Sie sehen?"
+4. Take snapshot to find the animation textbox
+5. Type MOTION prompt: mcp__playwright__browser_type(
+     element="Animation prompt textbox",
+     ref="<textbox_ref>",
+     text="<segments[0].motion_prompt from pipeline.json>"
+   )
+6. Click "Prompt senden" to start video generation
+7. Wait for video: mcp__playwright__browser_wait_for(time=120)
+   NOTE: Video generation takes 2-3 minutes! Progress shows as percentage.
+8. Take snapshot to verify video is complete (shows play controls, duration "0:08")
+
+STEP 6: DOWNLOAD VIDEO
+======================
+1. Take snapshot to find "DOWNLOAD download" button on the video
+2. Click the DOWNLOAD button - a menu appears with options
+3. Click "Herunterladen" (Download) option for MP4 format
+4. Check MCP output for downloaded filename:
+   "Downloaded file Whisk_xxx.mp4 to .playwright-mcp/Whisk-xxx.mp4"
+
+STEP 7: DOWNLOAD KEYFRAME
+=========================
+1. Click "close" button to exit animation view and return to main storyboard
+2. Take snapshot - both generated keyframes are visible with download buttons
+3. Click "download" button on the CHOSEN keyframe (the one you animated)
+4. Check MCP output for downloaded filename:
+   "Downloaded file Whisk_xxx.jpeg to .playwright-mcp/Whisk-xxx.jpeg"
+
+STEP 8: MOVE FILES TO OUTPUT PATHS
+==================================
+Move downloads from .playwright-mcp/ to correct locations:
+```powershell
+# Move video
+Move-Item ".playwright-mcp/Whisk-xxx.mp4" "output/project/scene-03/seg-A.mp4" -Force
+
+# Move keyframe
+Move-Item ".playwright-mcp/Whisk-xxx.jpeg" "output/project/keyframes/scene-03-start.jpg" -Force
 ```
+
+STEP 9: UPDATE STATUS & CONTINUE
+================================
+1. Update pipeline.json status for keyframe and segment to "completed"
+2. For next segment (seg-B+), extract last frame as reference:
+   ffmpeg -sseof -1 -i "scene-XX/seg-A.mp4" -frames:v 1 "scene-XX/extracted/after-seg-A.png"
+3. Start new Whisk chat for next scene/segment
+```
+
+**Key insight:** Asset references in Whisk slots ensure character and environment consistency across all generated content. Always upload character AND background references before generating!
 
 ### Key MCP Tools
 
@@ -218,49 +432,93 @@ The v4.0 pipeline schema includes:
 
 **CHECKPOINT:** Get user approval before proceeding.
 
-### Phase 4: Asset Execution (MCP)
+### Phase 4: Asset Execution (Sub-Agents - Parallel)
 
-**Before reviewing, read:** `references/vlm-checklists.md`
+**Uses sub-agents for memory efficiency. See `references/subagents/asset-generation.md`**
 
-For each asset in pipeline.json:
-1. Navigate to Whisk (if not already there)
-2. Generate image using asset prompt
-3. Download and move to correct path
-4. Update pipeline.json status to "completed"
-5. Start new chat for next generation
+**Spawn sub-agents in PARALLEL for all assets:**
 
-**CHECKPOINT:** Review assets with VLM, get user approval.
+1. **Extract all pending assets** from pipeline.json (characters, backgrounds, styles, objects)
 
-### Phase 5: Scene Keyframes Generation (MCP)
+2. **For each asset, spawn a sub-agent** with this prompt:
+   ```
+   Generate an asset using Google Whisk.
 
-**Before reviewing, read:** `references/vlm-checklists.md`
+   ASSET INFO:
+   - Type: {asset_type}
+   - Prompt: "{prompt}"
+   - Output Path: {project_base_path}/{output_path}
+
+   [Include full content from references/subagents/asset-generation.md]
+
+   AUTO-RETRY: Up to 2 retries on failure.
+   Return: status (success/failure), final output path
+   ```
+
+3. **Wait for all sub-agents** to complete
+
+4. **For each result:**
+   - On success: Update pipeline.json status to "completed"
+   - On failure: Log error, mark as "failed" in pipeline.json
+
+5. **Verify all assets exist** at their output paths
+
+**CHECKPOINT:** Review assets visually, get user approval before proceeding.
+
+### Phase 5+6: Combined Keyframe & Video Generation (Sub-Agents - Sequential)
+
+**Uses sub-agents for memory efficiency. See `references/subagents/video-generation.md`**
+
+**Spawn sub-agents SEQUENTIALLY per segment (seg-B depends on seg-A for frame extraction):**
 
 For each scene in pipeline.json:
-1. Generate scene's starting keyframe using Whisk
-2. Upload character references to Subject slot (if character scene)
-3. Upload background reference to Scene slot (if applicable)
-4. Download and move to `keyframes/scene-XX-start.png`
-5. Update pipeline.json status
+  For each segment in scene.segments with status "pending":
 
-**Verify shot type:** Ensure keyframe matches specified shot type.
+1. **Extract segment info from pipeline.json:**
+   - scene_id, segment_id
+   - first_keyframe.prompt (for seg-A) or continuation prompt
+   - segment.motion_prompt
+   - character asset paths (resolve from assets section)
+   - background asset path (resolve from assets section)
+   - keyframe_output_path, video_output_path
+   - previous_video_path (for seg-B+)
 
-**CHECKPOINT:** Review keyframes with VLM, get user approval.
+2. **Spawn sub-agent** with this prompt:
+   ```
+   Generate keyframe and video using Google Whisk.
 
-### Phase 6: Scene Videos Generation (MCP)
+   SEGMENT INFO:
+   - Scene: {scene_id}, Segment: {segment_id}
+   - Keyframe Prompt: "{keyframe_prompt}"
+   - Motion Prompt: "{motion_prompt}"
+   - Character Assets: {character_paths}
+   - Background Asset: {background_path}
+   - Keyframe Output: {keyframe_output_path}
+   - Video Output: {video_output_path}
+   - Previous Video: {previous_video_path} (for frame extraction, seg-B+ only)
 
-**Before reviewing, read:** `references/vlm-checklists.md`
+   [Include full content from references/subagents/video-generation.md]
 
-For each scene:
-  For each segment:
-    1. Use starting keyframe (segment A) or extracted frame (segments B+)
-    2. Generate video with motion prompt
-    3. Download and move to `scene-XX/seg-X.mp4`
-    4. Extract last frame: `ffmpeg -sseof -1 -i "seg-X.mp4" -frames:v 1 "extracted/after-seg-X.png"`
-    5. Update pipeline.json status
+   VLM REVIEW: Required - select better keyframe before animating.
+   AUTO-RETRY: Up to 2 retries on failure.
+   Return: status, keyframe_path, video_path
+   ```
 
-**Verify continuity:** Check screen direction and spatial consistency.
+3. **Wait for sub-agent** to complete
 
-**CHECKPOINT:** Review videos with VLM, get user approval.
+4. **On result:**
+   - Success: Update pipeline.json status to "completed"
+   - Failure: Log error, optionally retry or mark as "failed"
+
+5. **Continue to next segment** (seg-B needs seg-A's video for frame extraction)
+
+**Segment Dependencies:**
+```
+Scene 1: seg-A ──► seg-B ──► seg-C (sequential - frame extraction dependency)
+Scene 2: seg-A ──► seg-B           (can start after Scene 1 seg-A if needed)
+```
+
+**CHECKPOINT:** After all segments complete, review videos, get user approval.
 
 ### Phase 7: Final Concatenation
 
@@ -329,6 +587,14 @@ Move-Item -Path ".playwright-mcp/whisk-generated-xyz.png" -Destination "output/p
 | Element ref not found | Take new snapshot, refs change on page update |
 | Shot type mismatch | Add stronger shot type modifiers to prompt |
 | Screen direction flip | Check continuity notes, use neutral shots to reset |
+| Video generation slow | Wait 2-3 minutes, progress shows as percentage |
+| Element outside viewport | Click close button or navigate back, take new snapshot |
+| Click intercepted by overlay | Use browser_run_code with force:true or wait for overlay to close |
+| Download menu appears | Click "Herunterladen" for MP4, "GIF" for animated gif |
+| Keyframe not visible after animation | Close animation view first, then download from main view |
+| Character inconsistent | Upload character reference to Subject (Motiv) slot BEFORE generating |
+| Background wrong | Upload background reference to Scene (Szene) slot BEFORE generating |
+| Previous context affecting generation | Start new Whisk chat for each scene |
 
 For detailed troubleshooting, read: `references/troubleshooting.md`
 

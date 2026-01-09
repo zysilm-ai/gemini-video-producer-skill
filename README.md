@@ -66,12 +66,87 @@ The philosophy-first approach ensures visual coherence across all scenes.
 
 - **Professional Film Grammar** - Shot types, progressions, and continuity rules from academic research
 - **Genre Presets** - Pre-configured visual styles for Action, Horror, Comedy, Drama, Anime, Documentary
+- **Sub-Agent Architecture** - Efficient context management with parallel asset generation
 - **Cloud-Based** - No GPU required, uses Google Whisk
 - **Reference Slots** - Upload character, scene, and style references for consistency
 - **MCP Automation** - Claude directly controls browser via MCP Playwright
 - **Self-Healing** - Adapts to UI changes through semantic understanding
 - **Continuity Checking** - 180-degree rule, screen direction, spatial consistency
 - **Zero Setup** - MCP Playwright auto-installs if missing, just log in to Google
+
+## Sub-Agent Architecture (Context Management)
+
+This skill uses a **sub-agent pattern** for efficient memory management - a key innovation for long-running AI workflows.
+
+### The Problem
+
+Traditional single-agent workflows suffer from:
+- **Context bloat**: Memory fills with irrelevant generation history
+- **Token waste**: Previous asset prompts not needed for current generation
+- **Reliability issues**: Large contexts cause errors and confusion
+- **No parallelization**: Sequential execution only
+
+### The Solution
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  MAIN AGENT (Phases 0-3)                                        │
+│  • Understands user intent                                      │
+│  • Creates philosophy, scene breakdown, pipeline.json           │
+│  • Orchestrates sub-agents                                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│ Asset Sub-  │      │ Asset Sub-  │      │ Asset Sub-  │  PARALLEL
+│ Agent #1    │      │ Agent #2    │      │ Agent #N    │  EXECUTION
+│ (character) │      │ (background)│      │ (style)     │
+└─────────────┘      └─────────────┘      └─────────────┘
+         │                    │                    │
+         └────────────────────┼────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  VIDEO SUB-AGENTS (Sequential per scene)                        │
+│                                                                 │
+│  Scene 1: [seg-A] ──► [seg-B] ──► [seg-C]                      │
+│  Scene 2: [seg-A] ──► [seg-B]                                  │
+│                                                                 │
+│  Each sub-agent: fresh memory, complete instructions, VLM review│
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MAIN AGENT (Phase 7)                                           │
+│  • Concatenates all videos                                      │
+│  • Produces final output.mp4                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Benefits
+
+| Feature | Benefit |
+|---------|---------|
+| **Fresh memory per task** | No context pollution between generations |
+| **Parallel asset generation** | Generate all assets simultaneously |
+| **Fault isolation** | One failure doesn't affect others |
+| **Auto-retry** | Sub-agents retry up to 2x on failure |
+| **VLM review in sub-agent** | Keyframe quality check before animation |
+| **Stateless instructions** | Self-contained, reproducible tasks |
+
+### Sub-Agent Files
+
+```
+references/subagents/
+├── asset-generation.md    # Complete instructions for asset sub-agents
+└── video-generation.md    # Complete instructions for video sub-agents
+```
+
+Each sub-agent receives:
+- Specific task parameters (prompts, paths)
+- Complete MCP workflow instructions
+- VLM review checklist (for video sub-agents)
+- Auto-retry logic
 
 ## Shot Types
 
@@ -300,7 +375,7 @@ output/{project-name}/
 
 ```
 gemini-video-producer-skill/
-├── SKILL.md                   # Core skill instructions (~360 lines)
+├── skill.md                   # Core skill instructions
 ├── README.md                  # This file
 ├── assets/
 │   └── example-style.json     # Style template with genre preset
@@ -313,15 +388,18 @@ gemini-video-producer-skill/
 │   ├── continuity-rules.md    # 180° rule, screen direction
 │   ├── vlm-checklists.md      # Review checklists for VLM
 │   ├── pipeline-schema.md     # v4.0 pipeline schema definition
+│   ├── asset-prompts.md       # Professional asset prompt writing
 │   ├── prompt-engineering.md  # Prompt writing guidance
 │   ├── style-systems.md       # Visual style configuration
 │   ├── troubleshooting.md     # Detailed troubleshooting
+│   ├── subagents/             # Sub-agent instruction files
+│   │   ├── asset-generation.md    # Asset generation sub-agent
+│   │   └── video-generation.md    # Video generation sub-agent
 │   └── templates/
 │       ├── philosophy.md      # philosophy.md + style.json templates
 │       └── scene-breakdown.md # scene-breakdown.md template
 └── output/                    # Generated projects
-    ├── battlefield-fpv/       # Action POV example (v4.0)
-    └── tokyo-pigeon-incident/ # Anime comedy example (v4.0)
+    └── zelda-botw-story/      # Example project
 ```
 
 ## Contributing

@@ -6,23 +6,55 @@ Use these checklists when using vision capabilities to review generated content.
 
 ---
 
-## For Character Assets
+## For Character Assets (Model Sheet / Turnaround)
 
-After generating a character reference image, verify:
+After generating a character model sheet, verify:
 
-- [ ] Appearance matches description (hair, eyes, clothing, distinguishing features)
-- [ ] Pose is neutral and usable as reference (A-pose or T-pose)
-- [ ] Style matches production philosophy and genre preset
-- [ ] No artifacts, distortions, or extra limbs
-- [ ] Background is clean (white/neutral)
+- [ ] **Multiple views present**: Front, 3/4, side profile, and back views all visible
+- [ ] **Consistent scale**: All views same size/proportion across the sheet
+- [ ] **Neutral pose**: T-pose or A-pose (arms slightly away from body)
+- [ ] **Neutral expression**: No emotion, relaxed face suitable for reference
+- [ ] **Appearance matches description**: Hair, eyes, clothing, distinguishing features correct
+- [ ] **Style matches production philosophy**: Art style consistent with genre preset
+- [ ] **Clean background**: White or neutral gray, no distracting elements
+- [ ] **Full body visible**: Head to feet in frame for all views
+- [ ] **No artifacts**: No distortions, extra limbs, or generation errors
 
 ### Character Asset Regeneration Criteria
 
 Regenerate if:
+- Missing views (e.g., only front view, no turnaround)
+- Views at inconsistent scales
+- Action pose instead of neutral T-pose/A-pose
+- Emotional expression instead of neutral
 - Identity features don't match (wrong hair color, eye color, etc.)
 - Distortions or artifacts present
 - Style inconsistent with project
-- Pose not suitable for reference use
+- Busy or distracting background
+
+---
+
+## For Object Assets (Prop Reference Sheet)
+
+After generating a prop reference sheet, verify:
+
+- [ ] **Multiple views present**: Front, side, and 3/4 perspective views visible
+- [ ] **Scale reference included**: Human silhouette or measurement indicator present
+- [ ] **Detail callouts**: Important features shown in close-up (if applicable)
+- [ ] **Consistent lighting**: Same light direction across all views
+- [ ] **Appearance matches description**: Materials, colors, details correct
+- [ ] **Clean background**: White or neutral, no distracting elements
+- [ ] **No artifacts**: No distortions or generation errors
+
+### Object Asset Regeneration Criteria
+
+Regenerate if:
+- Missing views (single angle only)
+- No scale reference
+- Important details not visible
+- Inconsistent lighting across views
+- Object design doesn't match description
+- Artifacts or distortions present
 
 ---
 

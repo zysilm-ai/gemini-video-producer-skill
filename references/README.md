@@ -46,6 +46,15 @@ This directory contains reference documentation for the Gemini Video Producer Sk
 | `templates/philosophy.md` | Templates for philosophy.md and style.json |
 | `templates/scene-breakdown.md` | Template for scene-breakdown.md |
 
+### Sub-Agent Instructions
+
+| File | Description |
+|------|-------------|
+| `subagents/asset-generation.md` | Complete MCP workflow for asset generation sub-agents |
+| `subagents/video-generation.md` | Complete MCP workflow for video generation sub-agents |
+
+**Why sub-agents?** Each generation task runs in a fresh context, preventing memory bloat and enabling parallel execution. See main README for architecture details.
+
 ### Existing References
 
 | File | Description |
