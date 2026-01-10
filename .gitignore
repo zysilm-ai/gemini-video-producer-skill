@@ -64,3 +64,4 @@ comfyui_log.txt
 *.tmp
 *.temp
 nul
+.playwright-mcp
