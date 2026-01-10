@@ -9,12 +9,47 @@ description: >
   approach: establish visual style and production philosophy, then execute
   scene by scene with user feedback at each stage. Requires MCP Playwright
   server and a Google account with Gemini access.
-allowed-tools: Read, Write, Edit, Glob, AskUserQuestion, TodoWrite, mcp__playwright__*
+allowed-tools: Read, Write, Edit, Glob, Grep, AskUserQuestion, TodoWrite, Task, Bash
 ---
 
 # AI Video Producer (MCP Edition)
 
 Create professional AI-generated videos through a structured, iterative workflow using Gemini via MCP Playwright.
+
+## Architecture Overview
+
+This skill uses a **main agent + sub-agents architecture** for efficient context management:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         MAIN AGENT (this skill)                 │
+│  - Handles all user interaction and approvals                  │
+│  - Creates philosophy.md, style.json, scene-breakdown.md       │
+│  - Generates pipeline.json                                      │
+│  - Orchestrates sub-agents via Task tool                       │
+│  - Updates pipeline.json status after each sub-agent returns   │
+│  - Runs FFmpeg concatenation                                    │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ Task tool spawns sub-agents
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│ asset-generator│   │keyframe-generator│ │segment-generator│
+│ sub-agent     │   │ sub-agent     │   │ sub-agent     │
+├───────────────┤   ├───────────────┤   ├───────────────┤
+│ Fresh context │   │ Fresh context │   │ Fresh context │
+│ MCP browser   │   │ MCP browser   │   │ MCP browser   │
+│ Returns path  │   │ Returns path  │   │ Returns paths │
+│ + status only │   │ + status only │   │ + status only │
+└───────────────┘   └───────────────┘   └───────────────┘
+```
+
+**Benefits:**
+- Each generation has isolated memory (no context pollution)
+- Browser automation details don't clutter main conversation
+- Parallel execution possible for independent tasks
+- Easy retry of individual failed generations
+- Main agent stays focused on orchestration
 
 ## Prerequisites & Setup
 
@@ -46,131 +81,66 @@ At workflow start, verify MCP Playwright is available:
 4. **ALWAYS break videos into multiple scenes** - minimum 2 scenes for any video over 5 seconds
 5. **ALWAYS ask user for approval** before proceeding to the next phase
 6. **NEVER generate without a complete pipeline.json** - plan ALL prompts first, execute second
-7. **ALWAYS use MCP Playwright** for Gemini interaction - no Python scripts
-8. **ALWAYS move downloads to correct locations** - files download to `.playwright-mcp/`, must be moved to pipeline output paths
-9. **ALWAYS review generated outputs using VLM** - view images after each stage, assess quality
+7. **ALWAYS use sub-agents for generation** - use Task tool to spawn asset-generator, keyframe-generator, segment-generator
+8. **ALWAYS update pipeline.json** after each sub-agent returns with status
+9. **ALWAYS move downloads to correct locations** - files download to `.playwright-mcp/`, sub-agents handle this
 
-## Architecture
+## Sub-Agent Definitions
 
-```
-Claude reads pipeline.json
-    |
-Claude -> MCP Playwright -> Gemini Web Interface
-    |
-Claude updates pipeline.json status
-    |
-Claude moves downloads to correct output paths
-```
+Three sub-agents are defined in `.claude/agents/`:
 
-**Benefits:**
-- Self-healing: Claude adapts to UI changes by semantic understanding
-- No brittle CSS selectors that break when Gemini updates
-- Simpler codebase - no Python Playwright code to maintain
-- Real-time adaptation to page state
+### asset-generator
+- **Purpose:** Generate ONE asset image (character, background, object)
+- **Input:** asset_id, prompt, output_path, project_dir
+- **Output:** JSON with status, asset_id, output_path, message
 
-## MCP Playwright Operations Reference
+### keyframe-generator
+- **Purpose:** Generate ONE scene starting keyframe
+- **Input:** scene_id, prompt, output_path, project_dir, style_context
+- **Output:** JSON with status, scene_id, output_path, message
 
-### Login Check & Flow
+### segment-generator
+- **Purpose:** Generate ONE video segment (8 seconds max)
+- **Input:** segment_id, scene_id, motion_prompt, start_frame_path, output_video_path, project_dir, extract_end_frame, end_frame_path
+- **Output:** JSON with status, segment_id, scene_id, output_video_path, end_frame_path, message
 
-```
-1. Navigate to Gemini:
-   mcp__playwright__browser_navigate(url="https://gemini.google.com/app")
+## How to Invoke Sub-Agents
 
-2. Take snapshot to check state:
-   mcp__playwright__browser_snapshot()
-
-3. If cookie consent appears:
-   - Click "Accept all" button
-
-4. Check if logged in:
-   - Look for textbox "Prompt hier eingeben" or similar chat input
-   - If present: logged in
-   - If login form appears: inform user to log in manually
-
-5. If not logged in:
-   - Inform user: "Please log in to your Google account in the browser window"
-   - Wait for login: mcp__playwright__browser_wait_for(text="Prompt", time=120)
-```
-
-### Image Generation
+Use the Task tool with `subagent_type` matching the agent name:
 
 ```
-1. Ensure on Gemini chat page (navigate if needed)
-
-2. Type prompt into chat:
-   mcp__playwright__browser_type(
-     element="Prompt input textbox",
-     ref="<textbox_ref>",
-     text="Generate an image: <prompt>",
-     submit=true
-   )
-
-3. Wait for generation (15-60 seconds):
-   mcp__playwright__browser_wait_for(time=30)
-   mcp__playwright__browser_snapshot()  # Check if image appeared
-
-4. Download the image:
-   - Find download button in snapshot (usually "Download" or download icon)
-   - mcp__playwright__browser_click(element="Download button", ref="<ref>")
-   - Wait for download: mcp__playwright__browser_wait_for(textGone="downloading")
-
-5. Move file to correct location:
-   - Downloaded to: .playwright-mcp/<filename>.png
-   - Move to: <pipeline_output_path>
-   - Use PowerShell: Move-Item -Path "source" -Destination "dest"
-
-6. Update pipeline.json status to "completed"
+Task(
+  subagent_type="asset-generator",
+  prompt='''
+  Generate this asset:
+  {
+    "asset_id": "hero_character",
+    "prompt": "A heroic knight in silver armor, standing tall, dramatic lighting",
+    "output_path": "output/project/assets/characters/hero.png",
+    "project_dir": "D:/Project/gemini-video-producer-skill/output/project"
+  }
+  ''',
+  description="Generate hero character asset"
+)
 ```
 
-### Video Generation
+**Parallel Execution:** For independent tasks, spawn multiple sub-agents in a single message:
 
 ```
-1. Start new chat or continue existing:
-   - Click "New chat" button if needed
-
-2. For Image-to-Video (I2V):
-   a. Upload start frame:
-      - Click upload/attach button
-      - mcp__playwright__browser_file_upload(paths=["<keyframe_path>"])
-
-   b. Type video prompt:
-      mcp__playwright__browser_type(
-        element="Prompt input",
-        ref="<ref>",
-        text="Create a video: <motion_prompt>",
-        submit=true
-      )
-
-3. For Text-to-Video (T2V):
-   - Just type the prompt without uploading images
-
-4. Wait for video generation (60-180 seconds):
-   mcp__playwright__browser_wait_for(time=60)
-   mcp__playwright__browser_snapshot()  # Check progress
-
-5. Download the video:
-   - Find video element and download button
-   - Click download
-   - Wait for completion
-
-6. Move to correct output path
-
-7. Extract last frame if needed for next scene:
-   - Use ffmpeg or similar to extract last frame
-   - Save as next keyframe
+# Assets can be generated in parallel
+Task(subagent_type="asset-generator", prompt="...asset 1...", description="Generate asset 1")
+Task(subagent_type="asset-generator", prompt="...asset 2...", description="Generate asset 2")
+Task(subagent_type="asset-generator", prompt="...asset 3...", description="Generate asset 3")
 ```
 
-### Key MCP Tools
+**Sequential Execution:** Segments within a scene must be sequential (frame chaining):
+```
+# Segment A first (uses keyframe)
+result_A = Task(subagent_type="segment-generator", prompt="...seg A with keyframe...")
 
-| Tool | Purpose |
-|------|---------|
-| `browser_navigate` | Go to URL |
-| `browser_snapshot` | Get page accessibility tree (preferred over screenshot) |
-| `browser_click` | Click element by ref |
-| `browser_type` | Type text into input, optionally submit |
-| `browser_file_upload` | Upload files |
-| `browser_wait_for` | Wait for text/time |
-| `browser_take_screenshot` | Visual screenshot (for user review) |
+# Segment B uses extracted frame from A
+result_B = Task(subagent_type="segment-generator", prompt="...seg B with after-seg-A.png...")
+```
 
 ## Pipeline Architecture
 
@@ -184,16 +154,16 @@ Videos are structured hierarchically:
 
 ```
 Scene 1 (20 sec target → 3 segments)
-├── Keyframe: scene-01-start.png (GENERATED)
-├── Segment A (8 sec) → extract frame
-├── Segment B (8 sec) → extract frame
-└── Segment C (4 sec)
+├── Keyframe: scene-01-start.png (GENERATED via keyframe-generator)
+├── Segment A (8 sec) → extract frame (via segment-generator)
+├── Segment B (8 sec) → extract frame (via segment-generator)
+└── Segment C (4 sec) (via segment-generator, no extraction)
 
 [TRANSITION: fade/cut/dissolve]
 
 Scene 2 (8 sec target → 1 segment)
-├── Keyframe: scene-02-start.png (GENERATED - new visual context)
-└── Segment A (8 sec)
+├── Keyframe: scene-02-start.png (GENERATED via keyframe-generator)
+└── Segment A (8 sec) (via segment-generator)
 ```
 
 **Why this model:**
@@ -207,11 +177,13 @@ Scene 2 (8 sec target → 1 segment)
 ### Phase 0: Setup Check
 
 ```
-1. Navigate to https://gemini.google.com/app
+1. Navigate to https://gemini.google.com/app (use MCP directly for initial check)
 2. Handle cookie consent if needed
 3. Verify login status
 4. If not logged in, guide user through login
 ```
+
+**Note:** This phase is done by the main agent directly to verify MCP is working.
 
 ### Phase 1: Production Philosophy (REQUIRED)
 
@@ -445,84 +417,170 @@ Create `{output_dir}/pipeline.json`:
 
 **CHECKPOINT:** Get user approval before proceeding.
 
-### Phase 4: Asset Execution (MCP)
+### Phase 4: Asset Execution (via sub-agents)
 
-For each asset in pipeline.json:
+For each asset in pipeline.json, spawn an `asset-generator` sub-agent:
 
-1. **Navigate to Gemini** (if not already there)
-2. **Generate image:**
-   - Type: "Generate an image: <asset_prompt>"
-   - Submit and wait for generation
-3. **Download image:**
-   - Click download button
-   - Wait for download to complete
-4. **Move to correct path:**
-   ```powershell
-   New-Item -ItemType Directory -Force -Path "<parent_dir>"
-   Move-Item -Path ".playwright-mcp/<downloaded_file>" -Destination "<output_path>"
-   ```
-5. **Update pipeline.json:** Set status to "completed"
-6. **Start new chat** for next generation (keeps context clean)
+```
+Task(
+  subagent_type="asset-generator",
+  prompt='''
+  Generate this asset:
+  {
+    "asset_id": "<asset_id>",
+    "prompt": "<asset_prompt>",
+    "output_path": "<full_output_path>",
+    "project_dir": "<project_directory>"
+  }
+  ''',
+  description="Generate <asset_id> asset"
+)
+```
 
-**CHECKPOINT:** Review assets with VLM, get user approval.
+**Parallel Execution:** Assets are independent - spawn all asset-generator sub-agents in parallel:
 
-### Phase 5: Scene Keyframes Generation (MCP)
+```python
+# All assets can run simultaneously
+Task(subagent_type="asset-generator", prompt="...asset1...", description="Generate asset 1")
+Task(subagent_type="asset-generator", prompt="...asset2...", description="Generate asset 2")
+Task(subagent_type="asset-generator", prompt="...asset3...", description="Generate asset 3")
+```
 
-For each scene in pipeline.json:
+After each sub-agent returns:
+1. Parse the returned JSON
+2. Update pipeline.json: Set asset's status to "completed" or "error"
+3. If error, note it for user review
 
-1. **Generate scene's starting keyframe** using Gemini image generation
-2. **Download and move** to `keyframes/scene-XX-start.png`
-3. **Update pipeline.json** scene's `first_keyframe.status` to "completed"
+**CHECKPOINT:** Review assets (read the image files), get user approval.
 
-**Note:** Each scene needs its own generated keyframe because scenes represent distinct visual contexts (different camera, location, perspective, etc.)
+### Phase 5: Scene Keyframes Generation (via sub-agents)
 
-**CHECKPOINT:** Review all scene keyframes with VLM, get user approval.
+For each scene in pipeline.json, spawn a `keyframe-generator` sub-agent:
 
-### Phase 6: Segment Execution (MCP)
+```
+Task(
+  subagent_type="keyframe-generator",
+  prompt='''
+  Generate this keyframe:
+  {
+    "scene_id": "<scene_id>",
+    "prompt": "<keyframe_prompt>",
+    "output_path": "<full_keyframe_path>",
+    "project_dir": "<project_directory>",
+    "style_context": {
+      "art_style": "<from style.json>",
+      "color_palette": "<from style.json>",
+      "lighting": "<from style.json>"
+    }
+  }
+  ''',
+  description="Generate <scene_id> keyframe"
+)
+```
+
+**Parallel Execution:** Keyframes are independent - spawn all in parallel:
+
+```python
+Task(subagent_type="keyframe-generator", prompt="...scene-01...", description="Generate scene-01 keyframe")
+Task(subagent_type="keyframe-generator", prompt="...scene-02...", description="Generate scene-02 keyframe")
+```
+
+After each sub-agent returns:
+1. Parse the returned JSON
+2. Update pipeline.json: Set scene's `first_keyframe.status` to "completed" or "error"
+
+**CHECKPOINT:** Review all scene keyframes (read the image files), get user approval.
+
+### Phase 6: Segment Execution (via sub-agents)
 
 For each scene in pipeline.json:
   For each segment in scene.segments:
 
-1. **Determine start frame:**
-   - If first segment of scene → use scene's `first_keyframe`
-   - Else → use extracted frame from previous segment
+**IMPORTANT: Segments within a scene MUST be sequential (frame chaining)**
 
-2. **Start new chat**
-
-3. **Upload start frame:**
-   - Click attach/upload button
-   - Use `browser_file_upload` with appropriate frame path
-
-4. **Type motion prompt:**
-   - "Create a video from this image: <segment.motion_prompt>"
-
-5. **Wait for video generation** (60-180 seconds)
-
-6. **Download video**
-
-7. **Move to correct path** (e.g., `scene-01/seg-A.mp4`)
-
-8. **Extract last frame** (if not the last segment in this scene):
-   ```powershell
-   ffmpeg -sseof -1 -i "scene-01/seg-A.mp4" -frames:v 1 "scene-01/extracted/after-seg-A.png"
-   ```
-
-9. **Update pipeline.json** segment status to "completed"
-
-**Execution Flow Example:**
 ```
-Scene 1 (3 segments):
-  seg-A: upload scene-01-start.png → generate → extract frame
-  seg-B: upload after-seg-A.png → generate → extract frame
-  seg-C: upload after-seg-B.png → generate → (no extraction, last segment)
+# Scene 1 segments - SEQUENTIAL
+seg_A_result = Task(
+  subagent_type="segment-generator",
+  prompt='''
+  {
+    "segment_id": "seg-01-A",
+    "scene_id": "scene-01",
+    "motion_prompt": "<motion_prompt>",
+    "start_frame_path": "<project_dir>/keyframes/scene-01-start.png",
+    "output_video_path": "<project_dir>/scene-01/seg-A.mp4",
+    "project_dir": "<project_directory>",
+    "extract_end_frame": true,
+    "end_frame_path": "<project_dir>/scene-01/extracted/after-seg-A.png"
+  }
+  ''',
+  description="Generate seg-01-A"
+)
 
-Scene 2 (1 segment):
-  seg-A: upload scene-02-start.png → generate → (no extraction, last segment)
+# Wait for seg_A to complete, then use its extracted frame
+seg_B_result = Task(
+  subagent_type="segment-generator",
+  prompt='''
+  {
+    "segment_id": "seg-01-B",
+    "scene_id": "scene-01",
+    "motion_prompt": "<motion_prompt>",
+    "start_frame_path": "<project_dir>/scene-01/extracted/after-seg-A.png",
+    "output_video_path": "<project_dir>/scene-01/seg-B.mp4",
+    "project_dir": "<project_directory>",
+    "extract_end_frame": true,
+    "end_frame_path": "<project_dir>/scene-01/extracted/after-seg-B.png"
+  }
+  ''',
+  description="Generate seg-01-B"
+)
+
+# Last segment - no extraction needed
+seg_C_result = Task(
+  subagent_type="segment-generator",
+  prompt='''
+  {
+    "segment_id": "seg-01-C",
+    "scene_id": "scene-01",
+    "motion_prompt": "<motion_prompt>",
+    "start_frame_path": "<project_dir>/scene-01/extracted/after-seg-B.png",
+    "output_video_path": "<project_dir>/scene-01/seg-C.mp4",
+    "project_dir": "<project_directory>",
+    "extract_end_frame": false,
+    "end_frame_path": null
+  }
+  ''',
+  description="Generate seg-01-C"
+)
 ```
+
+**Cross-Scene Parallelization:** Different scenes can run in parallel since they don't share frames:
+
+```python
+# Scene 1 and Scene 2 keyframes are ready - both scene segment chains can run in parallel
+# (But segments WITHIN each scene must be sequential)
+```
+
+**Execution Flow:**
+```
+Scene 1 (3 segments) - Sequential chain:
+  seg-A: start=keyframe → generate → extract frame
+  seg-B: start=after-seg-A.png → generate → extract frame
+  seg-C: start=after-seg-B.png → generate → (no extraction)
+
+Scene 2 (1 segment) - Can run in parallel with Scene 1:
+  seg-A: start=keyframe → generate → (no extraction)
+```
+
+After each sub-agent returns:
+1. Parse the returned JSON
+2. Update pipeline.json: Set segment's status to "completed" or "error"
 
 **CHECKPOINT:** Get user approval on videos.
 
 ### Phase 7: Final Concatenation with Transitions
+
+**This phase is handled by the main agent directly (not sub-agents).**
 
 Two-step concatenation: first combine segments within each scene, then combine scenes with transitions.
 
@@ -623,7 +681,7 @@ ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
 ## TodoWrite Template
 
 ```
-1. MCP: Navigate to Gemini, check login
+1. Check MCP Playwright availability
 2. Create philosophy.md
 3. Create style.json
 4. Get user approval on philosophy
@@ -631,43 +689,27 @@ ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
 6. Get user approval on scene breakdown
 7. Create pipeline.json (v3.0 with nested segments)
 8. Get user approval on pipeline
-9. MCP: Generate assets, download, move to correct paths
-10. Review assets with VLM, get user approval
-11. MCP: Generate scene keyframes (one per scene)
-12. Review keyframes with VLM, get user approval
-13. MCP: Generate segment videos (nested loop: scenes → segments)
-14. Get user approval on videos
-15. Concatenate segments within each scene
-16. Concatenate scenes with transitions into output.mp4
-17. Provide final summary
+9. Spawn asset-generator sub-agents (parallel)
+10. Update pipeline.json with asset results
+11. Review assets, get user approval
+12. Spawn keyframe-generator sub-agents (parallel)
+13. Update pipeline.json with keyframe results
+14. Review keyframes, get user approval
+15. Spawn segment-generator sub-agents (sequential per scene, parallel across scenes)
+16. Update pipeline.json with segment results
+17. Get user approval on videos
+18. Concatenate segments within each scene (ffmpeg)
+19. Concatenate scenes with transitions into output.mp4
+20. Provide final summary
 ```
 
-## File Download Handling
+## Error Handling
 
-**CRITICAL:** Downloads go to `.playwright-mcp/` directory. Always:
-
-1. After clicking download, check the download result in MCP output
-2. Note the downloaded filename
-3. Create target directory if needed
-4. Move file to correct pipeline output path
-5. Verify file exists at destination
-
-```powershell
-# Example
-New-Item -ItemType Directory -Force -Path "output/project/assets/backgrounds"
-Move-Item -Path ".playwright-mcp/Gemini-Generated-Image-xyz.png" -Destination "output/project/assets/backgrounds/battlefield.png" -Force
-```
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Cookie consent page | Click "Accept all" button |
-| Not logged in | Guide user to log in manually |
-| Generation stuck | Wait longer, check snapshot for progress |
-| Download not working | Try clicking download button again |
-| Element ref not found | Take new snapshot, refs change on page update |
-| Rate limited | Wait 1-2 minutes between generations |
+When a sub-agent returns an error:
+1. Log the error in pipeline.json (update status to "error", add error message)
+2. Inform the user of the failure
+3. Offer to retry: spawn a new sub-agent for the failed task
+4. Continue with other independent tasks if possible
 
 ## Technical Specs
 
@@ -682,3 +724,14 @@ Move-Item -Path ".playwright-mcp/Gemini-Generated-Image-xyz.png" -Destination "o
 **Key Terminology:**
 - **Scene** = A narrative/cinematic unit (any duration). Represents a continuous shot or distinct visual context. Each scene requires a generated starting keyframe.
 - **Segment** = A technical 8-second video chunk within a scene. Multiple segments chain together seamlessly via extracted frames to form longer scenes.
+- **Sub-agent** = Isolated agent instance spawned via Task tool. Has fresh context, returns result to main agent.
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Sub-agent returns error | Check error message, retry with fresh sub-agent |
+| Rate limited | Wait 1-2 minutes, then retry |
+| Generation stuck | Sub-agent will timeout and return error |
+| File not found | Check .playwright-mcp/ directory manually |
+| Pipeline out of sync | Re-read pipeline.json, update status fields |
