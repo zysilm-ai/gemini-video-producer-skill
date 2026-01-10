@@ -1,20 +1,20 @@
 ---
 name: ai-video-producer
 description: >
-  AI video production workflow using Gemini via MCP Playwright browser automation.
+  AI video production workflow using Google Flow via MCP Playwright browser automation.
   Creates any video type: promotional, educational, narrative, social media,
   animations, game trailers, music videos, product demos, and more. Use when
   users want to create videos with AI, need help with video storyboarding,
   keyframe generation, or video prompt writing. Follows a philosophy-first
   approach: establish visual style and production philosophy, then execute
   scene by scene with user feedback at each stage. Requires MCP Playwright
-  server and a Google account with Gemini access.
+  server and a Google account with Flow access (Google AI Pro or Ultra subscription).
 allowed-tools: Read, Write, Edit, Glob, Grep, AskUserQuestion, TodoWrite, Task, Bash
 ---
 
 # AI Video Producer (MCP Edition)
 
-Create professional AI-generated videos through a structured, iterative workflow using Gemini via MCP Playwright.
+Create professional AI-generated videos through a structured, iterative workflow using Google Flow via MCP Playwright.
 
 ## Architecture Overview
 
@@ -54,7 +54,7 @@ This skill uses a **main agent + sub-agents architecture** for efficient context
 ## Prerequisites & Setup
 
 **Required:**
-- Google account with Gemini access
+- Google account with Flow access (Google AI Pro or Ultra subscription)
 - Internet connection
 
 **MCP Playwright:** If not installed, run automatically:
@@ -70,6 +70,26 @@ At workflow start, verify MCP Playwright is available:
 1. Try calling `mcp__playwright__browser_snapshot()`
 2. If tools unavailable, offer to install: `claude mcp add playwright -- npx @playwright/mcp@latest`
 3. After install, user must restart Claude Code for MCP to load
+
+## Google Flow Overview
+
+**URL:** `https://labs.google/fx/flow`
+
+Flow is a project-based AI filmmaking tool with these generation modes:
+
+| Mode | German Label | Model | Purpose |
+|------|--------------|-------|---------|
+| Text to Image | "Bild erstellen" | Nano Banana Pro | Generate assets and keyframes |
+| Video from Frames | "Video aus Frames" | Veo 3.1 Fast | Generate video segments from start frame |
+| Text to Video | "Video aus Text" | Veo 3.1 Fast | Generate video from text only |
+| Video from Elements | "Video aus Elementen" | Veo 3.1 Fast | Generate video with reference elements |
+
+**Key Interface Elements:**
+- Mode selector dropdown (combobox) to switch between generation types
+- Text input field for prompts
+- "add" buttons for uploading reference images/frames
+- "Erstellen" (Create) button to start generation
+- Generated content appears in the gallery (Videos/Images tabs)
 
 ## MANDATORY WORKFLOW REQUIREMENTS
 
@@ -90,19 +110,22 @@ At workflow start, verify MCP Playwright is available:
 Three sub-agents are defined in `.claude/agents/`:
 
 ### asset-generator
-- **Purpose:** Generate ONE asset image (character, background, object)
+- **Purpose:** Generate ONE asset image (character, background, object) via Flow
 - **Input:** asset_id, prompt, output_path, project_dir
 - **Output:** JSON with status, asset_id, output_path, message
+- **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
 
 ### keyframe-generator
-- **Purpose:** Generate ONE scene starting keyframe
+- **Purpose:** Generate ONE scene starting keyframe via Flow
 - **Input:** scene_id, prompt, output_path, project_dir, style_context
 - **Output:** JSON with status, scene_id, output_path, message
+- **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
 
 ### segment-generator
-- **Purpose:** Generate ONE video segment (8 seconds max)
+- **Purpose:** Generate ONE video segment (8 seconds max) via Flow
 - **Input:** segment_id, scene_id, motion_prompt, start_frame_path, output_video_path, project_dir, extract_end_frame, end_frame_path
 - **Output:** JSON with status, segment_id, scene_id, output_video_path, end_frame_path, message
+- **Uses:** Flow "Video aus Frames" mode (Veo 3.1 Fast)
 
 ## How to Invoke Sub-Agents
 
@@ -177,10 +200,11 @@ Scene 2 (8 sec target → 1 segment)
 ### Phase 0: Setup Check
 
 ```
-1. Navigate to https://gemini.google.com/app (use MCP directly for initial check)
+1. Navigate to https://labs.google/fx/flow (use MCP directly for initial check)
 2. Handle cookie consent if needed
-3. Verify login status
+3. Verify login status (look for project list or user avatar)
 4. If not logged in, guide user through login
+5. Create a new project or use existing one
 ```
 
 **Note:** This phase is done by the main agent directly to verify MCP is working.
@@ -254,7 +278,7 @@ Create `{output_dir}/scene-breakdown.md`:
 ## Overview
 - **Total Duration**: [X seconds]
 - **Number of Scenes**: [N]
-- **Segment Duration**: 8 seconds (Gemini limit)
+- **Segment Duration**: 8 seconds (Flow Veo limit)
 - **Video Type**: [promotional/narrative/educational/etc.]
 
 ---
@@ -409,7 +433,7 @@ Create `{output_dir}/pipeline.json`:
 ```
 
 **Schema Notes:**
-- `config.segment_duration`: Gemini's max video length (8 seconds)
+- `config.segment_duration`: Flow Veo's max video length (8 seconds)
 - `scenes[].duration_target`: Desired scene length → determines segment count: `ceil(duration / 8)`
 - `scenes[].transition_to_next`: Transition to apply before next scene (`cut`, `fade`, `dissolve`, `wipe`, or `null` for last scene)
 - `scenes[].first_keyframe`: Generated image to establish scene's visual context
@@ -682,25 +706,26 @@ ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
 
 ```
 1. Check MCP Playwright availability
-2. Create philosophy.md
-3. Create style.json
-4. Get user approval on philosophy
-5. Create scene-breakdown.md (with scenes and segments)
-6. Get user approval on scene breakdown
-7. Create pipeline.json (v3.0 with nested segments)
-8. Get user approval on pipeline
-9. Spawn asset-generator sub-agents (parallel)
-10. Update pipeline.json with asset results
-11. Review assets, get user approval
-12. Spawn keyframe-generator sub-agents (parallel)
-13. Update pipeline.json with keyframe results
-14. Review keyframes, get user approval
-15. Spawn segment-generator sub-agents (sequential per scene, parallel across scenes)
-16. Update pipeline.json with segment results
-17. Get user approval on videos
-18. Concatenate segments within each scene (ffmpeg)
-19. Concatenate scenes with transitions into output.mp4
-20. Provide final summary
+2. Navigate to Flow and verify login
+3. Create philosophy.md
+4. Create style.json
+5. Get user approval on philosophy
+6. Create scene-breakdown.md (with scenes and segments)
+7. Get user approval on scene breakdown
+8. Create pipeline.json (v3.0 with nested segments)
+9. Get user approval on pipeline
+10. Spawn asset-generator sub-agents (parallel)
+11. Update pipeline.json with asset results
+12. Review assets, get user approval
+13. Spawn keyframe-generator sub-agents (parallel)
+14. Update pipeline.json with keyframe results
+15. Review keyframes, get user approval
+16. Spawn segment-generator sub-agents (sequential per scene, parallel across scenes)
+17. Update pipeline.json with segment results
+18. Get user approval on videos
+19. Concatenate segments within each scene (ffmpeg)
+20. Concatenate scenes with transitions into output.mp4
+21. Provide final summary
 ```
 
 ## Error Handling
@@ -715,11 +740,13 @@ When a sub-agent returns an error:
 
 | Parameter | Value |
 |-----------|-------|
-| Segment Duration | 8 seconds per generation (Gemini Veo limit) |
-| Image Resolution | Up to 1024x1024 |
-| Video Resolution | Up to 1080p |
-| Rate Limiting | ~2-3 generations per minute |
+| Segment Duration | 8 seconds per generation (Flow Veo limit) |
+| Image Resolution | Up to 1024x1024 (Nano Banana Pro) |
+| Video Resolution | Up to 1080p (4K with AI Ultra) |
+| Rate Limiting | Credits-based (180 free monthly, more with subscription) |
 | GPU Required | None (cloud-based) |
+| Image Model | Nano Banana Pro |
+| Video Model | Veo 3.1 Fast |
 
 **Key Terminology:**
 - **Scene** = A narrative/cinematic unit (any duration). Represents a continuous shot or distinct visual context. Each scene requires a generated starting keyframe.
@@ -731,7 +758,10 @@ When a sub-agent returns an error:
 | Issue | Solution |
 |-------|----------|
 | Sub-agent returns error | Check error message, retry with fresh sub-agent |
-| Rate limited | Wait 1-2 minutes, then retry |
+| Rate limited / Out of credits | Wait or upgrade subscription, then retry |
 | Generation stuck | Sub-agent will timeout and return error |
 | File not found | Check .playwright-mcp/ directory manually |
 | Pipeline out of sync | Re-read pipeline.json, update status fields |
+| Not logged in | Guide user to log in at labs.google/fx/flow |
+| Generation mode wrong | Verify correct mode selected in dropdown |
+
