@@ -460,6 +460,51 @@ Create `{output_dir}/pipeline.json`:
 - `scenes[].first_keyframe`: Generated image to establish scene's visual context
 - `scenes[].segments[]`: Technical video chunks that chain seamlessly within the scene
 
+### Veo Motion Prompt Guidelines (CRITICAL)
+
+Motion prompts for video segments MUST follow this official Veo structure:
+
+**Structure:** `[Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]`
+
+| Component | Description | Example |
+|-----------|-------------|---------|
+| **Cinematography** | Camera movement, shot type, lens | "Slow dolly push forward", "Wide tracking shot", "Close-up with shallow depth of field" |
+| **Subject** | Main visual focus with details | "A massive silver-blue warship with glowing cyan engines", "A young woman's face" |
+| **Action** | ONE primary motion/change | "rotates its turrets into firing position", "looks out the window at passing lights" |
+| **Context** | Setting, environment, surroundings | "against a backdrop of colorful nebula in deep space", "inside a bus at night during a rainstorm" |
+| **Style & Ambiance** | Mood, lighting, visual quality | "Tense pre-battle atmosphere, dramatic rim lighting, photorealistic cinematic quality" |
+
+**Prompt Requirements:**
+- **Length:** 100-150 words (3-6 sentences)
+- **ONE action per segment:** Don't describe 5 things happening simultaneously
+- **Specific camera language:** Use "dolly", "tracking", "pan", "crane", "push", "pull back" - not vague "camera moves"
+- **Motion focus:** Describe what MOVES, not static descriptions
+
+**Good Example:**
+```
+Slow dolly push forward through a massive fleet formation in deep space. Sleek silver-blue warships with angular hulls drift majestically past camera, their cyan engines pulsing with rhythmic blue light. Turrets on the nearest destroyer slowly rotate into firing position as shield generators flicker to life with crackling blue energy. The ships hold perfect V-formation against a backdrop of distant stars and colorful nebula. Tense pre-battle atmosphere, epic cinematic scale, photorealistic sci-fi with dramatic rim lighting on metal hulls.
+```
+
+**Bad Example (too many actions, vague camera):**
+```
+Battle erupts in full fury. Blue and red laser beams crisscross the frame. A battleship fires broadsides. Explosions ripple. Fighters weave between ships. Debris scatters everywhere. Camera tracks through chaos.
+```
+↑ This has 6+ simultaneous actions and "camera tracks through chaos" is vague.
+
+**Fixed Version:**
+```
+Dynamic tracking shot following a massive human battleship as it unleashes a devastating broadside. Blue energy bolts erupt from its flanking cannons, streaking across the void toward an enemy cruiser. Orange explosions bloom on the target's shields, rippling with impact energy. Debris and sparks scatter into space. The battleship's hull fills the foreground, weapon ports flashing in sequence. Intense combat lighting with contrasting blue and orange, chaotic but readable action, cinematic sci-fi blockbuster quality.
+```
+
+**Common Mistakes to Avoid:**
+| Mistake | Problem | Fix |
+|---------|---------|-----|
+| Multiple simultaneous actions | Veo can't render 5 things at once clearly | Focus on ONE primary action |
+| Static descriptions | "Ships in space" describes an image, not video | Add motion: "Ships drift forward, engines pulsing" |
+| Vague camera direction | "Camera moves dynamically" | Use specific: "Tracking shot following the ship" |
+| Too short (30-50 words) | Lacks detail for quality output | Expand to 100-150 words |
+| Missing style/mood | Generic output | Add atmosphere: "Tense, dramatic rim lighting" |
+
 **CHECKPOINT:** Get user approval before proceeding.
 
 ### Phase 4: Asset Execution (via sub-agents)
