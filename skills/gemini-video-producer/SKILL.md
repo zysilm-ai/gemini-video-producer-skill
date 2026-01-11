@@ -701,68 +701,60 @@ After each sub-agent returns:
 
 **CHECKPOINT:** Get user approval on videos.
 
-### Phase 7: Final Concatenation with Transitions
+### Phase 7: Final Concatenation
 
 **This phase is handled by the main agent directly (not sub-agents).**
 
-Two-step concatenation: first combine segments within each scene, then combine scenes with transitions.
+Use the `scripts/merge_videos.py` script to concatenate videos. This script uses moviepy and handles resolution differences automatically.
+
+**Merge Script Location:** `scripts/merge_videos.py`
+
+**Usage:**
+```bash
+python scripts/merge_videos.py -o <output_file> <input1> <input2> [input3] ...
+```
 
 **Step 1: Concatenate segments within each scene (seamless)**
 
-For each scene, concatenate its segments without transitions:
+For each scene, merge its segments:
 
-```powershell
+```bash
 # Scene 1: combine segments
-@"
-file 'scene-01/seg-A.mp4'
-file 'scene-01/seg-B.mp4'
-file 'scene-01/seg-C.mp4'
-"@ | Out-File -FilePath "scene-01/concat.txt" -Encoding ASCII
+cd {output_dir}
+python {skill_dir}/scripts/merge_videos.py -o scene-01/scene.mp4 scene-01/seg-A.mp4 scene-01/seg-B.mp4
 
-ffmpeg -f concat -safe 0 -i "scene-01/concat.txt" -c copy "scene-01/scene.mp4"
+# Scene 2: combine segments
+python {skill_dir}/scripts/merge_videos.py -o scene-02/scene.mp4 scene-02/seg-A.mp4 scene-02/seg-B.mp4 scene-02/seg-C.mp4 scene-02/seg-D.mp4
+
+# Scene 3: combine segments
+python {skill_dir}/scripts/merge_videos.py -o scene-03/scene.mp4 scene-03/seg-A.mp4 scene-03/seg-B.mp4
 ```
 
-**Step 2: Combine scenes with transitions**
+**Step 2: Combine all scenes into final video**
 
-Apply transitions between scenes based on `transition_to_next` in pipeline.json:
+Merge all scene videos into the final output:
 
-| Transition | FFmpeg Implementation |
-|------------|----------------------|
-| `cut` | Simple concatenation (no filter) |
-| `fade` | `xfade=transition=fade:duration=0.5` |
-| `dissolve` | `xfade=transition=dissolve:duration=0.5` |
-| `wipe` | `xfade=transition=wipeleft:duration=0.5` |
-
-**For `cut` transitions only (simple case):**
-```powershell
-@"
-file 'scene-01/scene.mp4'
-file 'scene-02/scene.mp4'
-"@ | Out-File -FilePath "concat-list.txt" -Encoding ASCII
-
-ffmpeg -f concat -safe 0 -i "concat-list.txt" -c copy "output.mp4"
+```bash
+python {skill_dir}/scripts/merge_videos.py -o output.mp4 scene-01/scene.mp4 scene-02/scene.mp4 scene-03/scene.mp4
 ```
 
-**For fade/dissolve/wipe transitions:**
-```powershell
-# Two scenes with fade (0.5 sec transition)
-# offset = scene1_duration - transition_duration
-ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" `
-  -filter_complex "[0:v][1:v]xfade=transition=fade:duration=0.5:offset=15.5[v]" `
-  -map "[v]" -c:v libx264 "output.mp4"
+**Script Features:**
+- Automatically resizes videos to match the first video's resolution
+- Handles any number of input videos (2 or more)
+- Uses libx264 codec for compatibility
+- Returns JSON status with duration and resolution info
 
-# Three scenes with different transitions
-ffmpeg -i "scene-01/scene.mp4" -i "scene-02/scene.mp4" -i "scene-03/scene.mp4" `
-  -filter_complex "[0:v][1:v]xfade=transition=fade:duration=0.5:offset=15.5[v1]; `
-                   [v1][2:v]xfade=transition=dissolve:duration=0.5:offset=23.5[v2]" `
-  -map "[v2]" -c:v libx264 "output.mp4"
-```
-
-**Available xfade transitions:** `fade`, `dissolve`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`, `pixelize`, `radial`, `smoothleft`, `smoothright`
+**Script Options:**
+| Option | Description |
+|--------|-------------|
+| `-o, --output` | Output video file path (required) |
+| `--codec` | Video codec (default: libx264) |
+| `--fps` | Output FPS (default: first video's FPS) |
+| `--no-resize` | Don't resize videos to match first |
 
 **Step 3: Clean up and finalize**
 
-1. Remove intermediate files (concat.txt, scene.mp4 per scene) - optional
+1. Remove intermediate files (scene.mp4 per scene) - optional
 2. Update pipeline.json to mark project complete
 
 **Final output:** `{output_dir}/output.mp4`
