@@ -82,10 +82,12 @@ Flow is a project-based AI filmmaking tool with these generation modes:
 
 | Mode | German Label | Model | Purpose |
 |------|--------------|-------|---------|
-| Text to Image | "Bild erstellen" | Nano Banana Pro | Generate assets and keyframes |
+| Text to Image | "Bild erstellen" | Nano Banana Pro | Generate assets, keyframes, references |
 | Video from Frames | "Video aus Frames" | Veo 3.1 - Quality | Generate video segments from start frame |
 | Text to Video | "Video aus Text" | Veo 3.1 - Quality | Generate video from text only |
-| Video from Elements | "Video aus Elementen" | Veo 3.1 - Quality | Generate video with reference elements |
+| Ingredients to Video | "Video aus Elementen" | Veo 2 | Generate video with reference images for subject consistency |
+| Frames to Video | "Frames zu Video" | Veo 3.1 | Interpolate between start AND end frames |
+| **Extend** | "Erweitern" | Veo 3.1 | **Continue from last second of previous clip** |
 
 **Key Interface Elements:**
 - Mode selector dropdown (combobox) to switch between generation types
@@ -94,11 +96,53 @@ Flow is a project-based AI filmmaking tool with these generation modes:
 - "Erstellen" (Create) button to start generation
 - Generated content appears in the gallery (Videos/Images tabs)
 - Settings button ("tune" / "Einstellungen") to configure model and output count
+- **Extend button** on generated videos to continue the action
 
 **REQUIRED Video Settings (configure via Settings button):**
 - **Model:** Veo 3.1 - Quality (NOT Veo 3.1 - Fast)
 - **Outputs per prompt:** 1 (NOT 2)
 - **Aspect ratio:** Querformat 16:9 (Landscape)
+
+## Continuity Architecture (CRITICAL)
+
+**Problem:** AI video generation is stateless. Each generation starts fresh with no memory of:
+- Camera trajectory (was moving left, should continue left)
+- Subject identity (this specific ship, not a similar one)
+- Narrative state (enemy is losing, human fleet is winning)
+- Action continuity (explosion should continue expanding)
+
+**Solution:** This skill uses multiple continuity techniques:
+
+### 1. Extend-Based Segment Chaining
+Instead of generating new videos from extracted frames, use Flow's **Extend** feature:
+- Extend analyzes the **last second** (not just last frame) of the previous clip
+- Preserves motion vectors, camera direction, and subject identity
+- Each extension adds 7-8 seconds, chainable up to 148 seconds
+
+### 2. Reference Images for Subject Consistency
+Generate "hero images" of key subjects and use as **Ingredients**:
+- Human flagship reference (isolated, clean background)
+- Enemy vessels reference
+- Key characters/objects
+- Use same references across ALL segments
+
+### 3. Explicit Prompt Linking
+Every continuation prompt MUST reference the previous state:
+- "Continuing from the previous shot..."
+- "Maintaining the camera's forward momentum..."
+- "The [subject], still [previous state], now..."
+
+### 4. Anchor Moments
+End each segment with a "holdable" moment for clean extensions:
+- "camera holds on the explosion for a beat"
+- "ship maintains course, engines steady"
+- "camera settles into stable tracking"
+
+### 5. Narrative State Tracking
+Track what has happened narratively in pipeline.json:
+- Who is winning/losing
+- What has been destroyed
+- Where the camera is spatially
 
 ## MANDATORY WORKFLOW REQUIREMENTS
 
@@ -116,13 +160,20 @@ Flow is a project-based AI filmmaking tool with these generation modes:
 
 ## Sub-Agent Definitions
 
-Three sub-agents are defined in `.claude/agents/`:
+Four sub-agents are defined in `.claude/agents/`:
 
 ### asset-generator
 - **Purpose:** Generate ONE asset image (character, background, object) via Flow
 - **Input:** asset_id, prompt, output_path, project_dir
 - **Output:** JSON with status, asset_id, output_path, message
 - **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
+
+### reference-generator
+- **Purpose:** Generate ONE reference image for subject consistency (isolated subject on clean background)
+- **Input:** reference_id, prompt, output_path, project_dir
+- **Output:** JSON with status, reference_id, output_path, message
+- **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
+- **Note:** References are used as "Ingredients" to maintain subject identity across segments
 
 ### keyframe-generator
 - **Purpose:** Generate ONE scene starting keyframe via Flow
@@ -131,10 +182,14 @@ Three sub-agents are defined in `.claude/agents/`:
 - **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
 
 ### segment-generator
-- **Purpose:** Generate ONE video segment (8 seconds max) via Flow
-- **Input:** segment_id, scene_id, motion_prompt, start_frame_path, output_video_path, project_dir, extract_end_frame, end_frame_path
-- **Output:** JSON with status, segment_id, scene_id, output_video_path, end_frame_path, message
-- **Uses:** Flow "Video aus Frames" mode (Veo 3.1 Fast)
+- **Purpose:** Generate video segments via Flow using TWO modes:
+  - **First segment of scene:** "Video aus Frames" from keyframe
+  - **Continuation segments:** "Extend" from previous segment
+- **Input:** segment_id, scene_id, motion_prompt, mode (initial|extend), previous_video_path, start_frame_path, output_video_path, project_dir, anchor_moment
+- **Output:** JSON with status, segment_id, scene_id, output_video_path, message
+- **Uses:** Flow "Video aus Frames" OR "Extend" feature (Veo 3.1 Quality)
+
+**CRITICAL:** Continuation segments MUST use Extend mode, NOT new generations from extracted frames.
 
 ## How to Invoke Sub-Agents
 
@@ -188,33 +243,45 @@ result_B = Task(subagent_type="general-purpose", prompt="[segment-generator inst
 
 ## Pipeline Architecture
 
-### Scene and Segment Model
+### Scene and Segment Model (with Continuity)
 
-Videos are structured hierarchically:
-- **Scenes** contain one or more **segments**
-- Each **scene** has a generated starting keyframe (new visual context)
-- **Segments** within a scene chain via extracted frames (seamless continuity)
-- **Transitions** between scenes are applied programmatically (cut, fade, dissolve)
+Videos are structured hierarchically with **continuity-preserving connections**:
+- **References** = isolated subject images used across ALL generations for identity consistency
+- **Scenes** = narrative units with distinct visual context (requires new keyframe)
+- **Segments** = technical chunks within scenes, connected via **Extend** (NOT frame extraction)
 
 ```
+REFERENCES (generated once, used everywhere)
+├── ref-human-flagship.png (isolated ship on clean background)
+├── ref-enemy-dreadnought.png
+└── ref-fighter-squadron.png
+
 Scene 1 (20 sec target → 3 segments)
-├── Keyframe: scene-01-start.png (GENERATED via keyframe-generator)
-├── Segment A (8 sec) → extract frame (via segment-generator)
-├── Segment B (8 sec) → extract frame (via segment-generator)
-└── Segment C (4 sec) (via segment-generator, no extraction)
+├── Keyframe: scene-01-start.png (GENERATED, establishes visual context)
+├── Segment A (8 sec) - mode: "initial" from keyframe
+│   └── anchor: "camera holds steady on fleet formation"
+├── Segment B (8 sec) - mode: "extend" from Segment A
+│   └── prompt: "Continuing the forward motion, the camera..."
+│   └── anchor: "flagship fills frame, shields flickering"
+└── Segment C (8 sec) - mode: "extend" from Segment B
+    └── prompt: "Maintaining momentum, the camera pushes past..."
 
-[TRANSITION: fade/cut/dissolve]
+[TRANSITION: cut - intentional scene break]
 
-Scene 2 (8 sec target → 1 segment)
-├── Keyframe: scene-02-start.png (GENERATED via keyframe-generator)
-└── Segment A (8 sec) (via segment-generator)
+Scene 2 (32 sec target → 4 segments)
+├── Keyframe: scene-02-start.png (NEW visual context - battle)
+├── Segment A (8 sec) - mode: "initial" from keyframe
+├── Segment B (8 sec) - mode: "extend" from Segment A
+├── Segment C (8 sec) - mode: "extend" from Segment B
+└── Segment D (8 sec) - mode: "extend" from Segment C
 ```
 
 **Why this model:**
-- Scenes = narrative units (different camera, location, or perspective)
-- Segments = technical chunks needed due to 8-second generation limit
-- Keyframes generated per scene (not per segment) - establishes visual context
-- Transitions between scenes are real cinematic choices (not just frame chaining)
+- **References** maintain subject identity across the entire video
+- **Extend mode** preserves camera trajectory, motion vectors, and action continuity
+- **Anchor moments** at segment ends ensure clean extension points
+- **Prompt linking** tells the AI what state to continue from
+- **Scenes** are intentional narrative breaks where continuity resets are acceptable
 
 ## Workflow Phases
 
@@ -302,22 +369,48 @@ Create `{output_dir}/scene-breakdown.md`:
 - **Segment Duration**: 8 seconds (Flow Veo limit)
 - **Video Type**: [promotional/narrative/educational/etc.]
 
+## Key Subjects (for Reference Generation)
+List all subjects that need visual consistency:
+- **Subject 1**: [e.g., "Human flagship - silver-blue angular dreadnought with cyan engines"]
+- **Subject 2**: [e.g., "Enemy vessels - dark crimson ships with organic protrusions"]
+- **Subject 3**: [e.g., "Fighter squadron - small angular craft"]
+
+## Camera Path Plan
+[Describe the overall camera journey through the video]
+- **Scene 1**: Camera starts [position], moves [direction] through [subject]
+- **Scene 1→2 Transition**: [CUT/FADE] - intentional [perspective change/location change]
+- **Scene 2**: Camera [movement pattern] through [action]
+- **Scene 2→3 Transition**: [CUT/FADE]
+- **Scene 3**: Camera [final movement] to [ending composition]
+
 ---
 
 ## Scene 1: [Title]
 **Duration**: [X seconds] → [ceil(X/8)] segments
 **Purpose**: [What this scene communicates]
 **Transition to Next**: [cut/fade/dissolve/wipe]
+**Camera Style**: [single clear style: tracking/dolly/crane/static]
+
+**Narrative State at Start**: [What the viewer should understand]
+**Narrative State at End**: [What has changed]
 
 **Starting Keyframe**:
 [Detailed visual description for the generated keyframe that starts this scene]
 
-**Segments**:
-1. **Seg A** (0-8s): [Motion description for first 8 seconds]
-2. **Seg B** (8-16s): [Motion description for next 8 seconds]
-3. **Seg C** (16-Xs): [Motion description for remaining seconds]
+**Segments** (with Extend-based continuity):
+1. **Seg A** (0-8s) [mode: initial]:
+   - Motion: [Motion description for first 8 seconds]
+   - Anchor: [How this segment ends - holdable moment for extension]
 
-**Camera**: [static/tracking/pan/zoom/POV]
+2. **Seg B** (8-16s) [mode: extend]:
+   - Link: "Continuing from Seg A, maintaining [speed/direction]..."
+   - Motion: [Motion description continuing the action]
+   - Anchor: [How this segment ends]
+
+3. **Seg C** (16-Xs) [mode: extend]:
+   - Link: "Maintaining momentum from Seg B..."
+   - Motion: [Motion description for remaining seconds]
+   - Anchor: [Final holdable moment before scene transition]
 
 ---
 
@@ -325,14 +418,18 @@ Create `{output_dir}/scene-breakdown.md`:
 **Duration**: [X seconds] → [ceil(X/8)] segments
 **Purpose**: [What this scene communicates]
 **Transition to Next**: [null - last scene]
+**Camera Style**: [camera movement type]
+
+**Narrative State at Start**: [State carried from Scene 1]
+**Narrative State at End**: [Final state]
 
 **Starting Keyframe**:
 [Detailed visual description - this is a NEW scene so needs its own keyframe]
 
 **Segments**:
-1. **Seg A** (0-8s): [Motion description]
-
-**Camera**: [camera style]
+1. **Seg A** (0-8s) [mode: initial]:
+   - Motion: [Motion description]
+   - Anchor: [Holdable ending]
 
 ---
 ```
@@ -368,13 +465,15 @@ Create `{output_dir}/scene-breakdown.md`:
 
 Create `{output_dir}/pipeline.json`:
 
-**Pipeline Schema v3.0:**
+**Pipeline Schema v4.0 (with Continuity Features):**
 ```json
 {
-  "version": "3.0",
+  "version": "4.0",
   "project_name": "project-name",
   "config": {
-    "segment_duration": 8
+    "segment_duration": 8,
+    "use_extend_mode": true,
+    "use_references": true
   },
   "metadata": {
     "created_at": "ISO timestamp",
@@ -382,28 +481,33 @@ Create `{output_dir}/pipeline.json`:
     "style_file": "style.json",
     "scene_breakdown_file": "scene-breakdown.md"
   },
-  "assets": {
-    "backgrounds": {
-      "<id>": {
-        "prompt": "Detailed description...",
-        "output": "assets/backgrounds/<id>.png",
-        "status": "pending"
-      }
+  "references": {
+    "human_flagship": {
+      "prompt": "Isolated silver-blue angular dreadnought warship, clean dark background, dramatic rim lighting, no other elements, reference image for video generation",
+      "output": "references/human_flagship.png",
+      "status": "pending"
     },
-    "characters": {
-      "<id>": {
-        "prompt": "Detailed description...",
-        "output": "assets/characters/<id>.png",
-        "status": "pending"
-      }
+    "enemy_vessel": {
+      "prompt": "Isolated dark crimson warship with organic protrusions, clean dark background, dramatic lighting, no other elements, reference image",
+      "output": "references/enemy_vessel.png",
+      "status": "pending"
     }
+  },
+  "assets": {
+    "backgrounds": {},
+    "characters": {}
   },
   "scenes": [
     {
       "id": "scene-01",
       "title": "Scene Title",
-      "duration_target": 20,
+      "duration_target": 24,
       "transition_to_next": "cut",
+      "camera_style": "dolly forward",
+      "narrative_state": {
+        "start": "Human fleet assembled, preparing for battle",
+        "end": "Fleet powered up, shields active, ready to engage"
+      },
       "first_keyframe": {
         "prompt": "Detailed visual description for scene start...",
         "output": "keyframes/scene-01-start.png",
@@ -412,19 +516,27 @@ Create `{output_dir}/pipeline.json`:
       "segments": [
         {
           "id": "seg-01-A",
-          "motion_prompt": "Motion description for first 8 seconds...",
+          "mode": "initial",
+          "motion_prompt": "Slow dolly push forward through the fleet formation...",
+          "anchor_moment": "camera holds steady, flagship centered in frame",
           "output_video": "scene-01/seg-A.mp4",
           "status": "pending"
         },
         {
           "id": "seg-01-B",
-          "motion_prompt": "Continuing motion for next 8 seconds...",
+          "mode": "extend",
+          "link_phrase": "Continuing the forward momentum from the previous shot",
+          "motion_prompt": "The camera continues pushing forward, now tracking alongside the flagship...",
+          "anchor_moment": "flagship fills frame, shields flickering to life",
           "output_video": "scene-01/seg-B.mp4",
           "status": "pending"
         },
         {
           "id": "seg-01-C",
-          "motion_prompt": "Final motion segment...",
+          "mode": "extend",
+          "link_phrase": "Maintaining the tracking movement",
+          "motion_prompt": "Camera maintains pace alongside the flagship as weapon ports begin to glow...",
+          "anchor_moment": "camera settles into stable position, fleet ready",
           "output_video": "scene-01/seg-C.mp4",
           "status": "pending"
         }
@@ -435,6 +547,11 @@ Create `{output_dir}/pipeline.json`:
       "title": "Different Scene",
       "duration_target": 8,
       "transition_to_next": null,
+      "camera_style": "dynamic tracking",
+      "narrative_state": {
+        "start": "Battle has begun, fleets engaged",
+        "end": "Enemy defeated, human fleet victorious"
+      },
       "first_keyframe": {
         "prompt": "New visual context description...",
         "output": "keyframes/scene-02-start.png",
@@ -443,7 +560,9 @@ Create `{output_dir}/pipeline.json`:
       "segments": [
         {
           "id": "seg-02-A",
+          "mode": "initial",
           "motion_prompt": "Motion description...",
+          "anchor_moment": "holdable ending moment",
           "output_video": "scene-02/seg-A.mp4",
           "status": "pending"
         }
@@ -453,12 +572,15 @@ Create `{output_dir}/pipeline.json`:
 }
 ```
 
-**Schema Notes:**
-- `config.segment_duration`: Flow Veo's max video length (8 seconds)
-- `scenes[].duration_target`: Desired scene length → determines segment count: `ceil(duration / 8)`
-- `scenes[].transition_to_next`: Transition to apply before next scene (`cut`, `fade`, `dissolve`, `wipe`, or `null` for last scene)
-- `scenes[].first_keyframe`: Generated image to establish scene's visual context
-- `scenes[].segments[]`: Technical video chunks that chain seamlessly within the scene
+**Schema v4.0 Changes:**
+- `config.use_extend_mode`: Enable Extend-based segment chaining (default: true)
+- `config.use_references`: Enable reference images for subject consistency (default: true)
+- `references`: Subject reference images for "Ingredients to Video" feature
+- `scenes[].camera_style`: Single camera movement type for the entire scene
+- `scenes[].narrative_state`: What the viewer should understand at start/end
+- `segments[].mode`: "initial" (from keyframe) or "extend" (from previous segment)
+- `segments[].link_phrase`: How this segment connects to previous (for extend mode)
+- `segments[].anchor_moment`: Holdable ending for clean extension point
 
 ### Veo Motion Prompt Guidelines (CRITICAL)
 
@@ -551,6 +673,50 @@ After each sub-agent returns:
 
 **CHECKPOINT:** Review assets (read the image files), get user approval.
 
+### Phase 4.5: Reference Generation (for Subject Consistency)
+
+**Purpose:** Generate isolated reference images of key subjects to maintain visual consistency across all video segments.
+
+**First, read the agent instructions:**
+```
+Read(".claude/agents/reference-generator.md")
+```
+
+For each reference in pipeline.json, spawn a `general-purpose` sub-agent:
+
+```
+Task(
+  subagent_type="general-purpose",
+  prompt='''
+  [Embed full contents of .claude/agents/reference-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
+  {
+    "reference_id": "human_flagship",
+    "prompt": "Isolated silver-blue angular dreadnought warship, clean dark background, dramatic rim lighting, no other elements, centered composition, reference image for video generation",
+    "output_path": "<project_dir>/references/human_flagship.png",
+    "project_dir": "<project_directory>"
+  }
+  ''',
+  description="Generate human_flagship reference"
+)
+```
+
+**Reference Image Requirements:**
+- **Isolated subject** on clean/dark background (no scene elements)
+- **Centered composition** for easy recognition
+- **Consistent with style.json** colors and lighting
+- **No action or motion** - static reference pose
+
+**Parallel Execution:** References are independent - spawn all in parallel.
+
+After each sub-agent returns:
+1. Parse the returned JSON
+2. Update pipeline.json: Set reference's status to "completed" or "error"
+
+**CHECKPOINT:** Review reference images, get user approval. These images will be used as "Ingredients" in video generation.
+
 ### Phase 5: Scene Keyframes Generation (via sub-agents)
 
 **First, read the agent instructions:**
@@ -597,7 +763,7 @@ After each sub-agent returns:
 
 **CHECKPOINT:** Review all scene keyframes (read the image files), get user approval.
 
-### Phase 6: Segment Execution (via sub-agents)
+### Phase 6: Segment Execution (via sub-agents with Extend)
 
 **First, read the agent instructions:**
 ```
@@ -607,10 +773,12 @@ Read(".claude/agents/segment-generator.md")
 For each scene in pipeline.json:
   For each segment in scene.segments:
 
-**IMPORTANT: Segments within a scene MUST be sequential (frame chaining)**
+**CRITICAL: Use Extend mode for continuation segments (NOT new generations from frames)**
 
 ```
-# Scene 1 segments - SEQUENTIAL
+# Scene 1 segments - SEQUENTIAL with EXTEND
+
+# Segment A: Initial generation from keyframe
 seg_A_result = Task(
   subagent_type="general-purpose",
   prompt='''
@@ -621,18 +789,18 @@ seg_A_result = Task(
   {
     "segment_id": "seg-01-A",
     "scene_id": "scene-01",
-    "motion_prompt": "<motion_prompt>",
+    "mode": "initial",
+    "motion_prompt": "<motion_prompt>. End with: <anchor_moment>",
     "start_frame_path": "<project_dir>/keyframes/scene-01-start.png",
     "output_video_path": "<project_dir>/scene-01/seg-A.mp4",
     "project_dir": "<project_directory>",
-    "extract_end_frame": true,
-    "end_frame_path": "<project_dir>/scene-01/extracted/after-seg-A.png"
+    "narrative_context": "<scene.narrative_state.start>"
   }
   ''',
-  description="Generate seg-01-A"
+  description="Generate seg-01-A (initial)"
 )
 
-# Wait for seg_A to complete, then use its extracted frame
+# Segment B: EXTEND from Segment A (preserves motion, camera, subjects)
 seg_B_result = Task(
   subagent_type="general-purpose",
   prompt='''
@@ -643,18 +811,19 @@ seg_B_result = Task(
   {
     "segment_id": "seg-01-B",
     "scene_id": "scene-01",
-    "motion_prompt": "<motion_prompt>",
-    "start_frame_path": "<project_dir>/scene-01/extracted/after-seg-A.png",
+    "mode": "extend",
+    "previous_video_path": "<project_dir>/scene-01/seg-A.mp4",
+    "link_phrase": "<link_phrase from pipeline.json>",
+    "motion_prompt": "<motion_prompt>. End with: <anchor_moment>",
     "output_video_path": "<project_dir>/scene-01/seg-B.mp4",
     "project_dir": "<project_directory>",
-    "extract_end_frame": true,
-    "end_frame_path": "<project_dir>/scene-01/extracted/after-seg-B.png"
+    "narrative_context": "Continuing from previous segment..."
   }
   ''',
-  description="Generate seg-01-B"
+  description="Generate seg-01-B (extend)"
 )
 
-# Last segment - no extraction needed
+# Segment C: EXTEND from Segment B
 seg_C_result = Task(
   subagent_type="general-purpose",
   prompt='''
@@ -665,39 +834,59 @@ seg_C_result = Task(
   {
     "segment_id": "seg-01-C",
     "scene_id": "scene-01",
-    "motion_prompt": "<motion_prompt>",
-    "start_frame_path": "<project_dir>/scene-01/extracted/after-seg-B.png",
+    "mode": "extend",
+    "previous_video_path": "<project_dir>/scene-01/seg-B.mp4",
+    "link_phrase": "<link_phrase from pipeline.json>",
+    "motion_prompt": "<motion_prompt>. End with: <anchor_moment>",
     "output_video_path": "<project_dir>/scene-01/seg-C.mp4",
     "project_dir": "<project_directory>",
-    "extract_end_frame": false,
-    "end_frame_path": null
+    "narrative_context": "<scene.narrative_state.end>"
   }
   ''',
-  description="Generate seg-01-C"
+  description="Generate seg-01-C (extend)"
 )
 ```
 
-**Cross-Scene Parallelization:** Different scenes can run in parallel since they don't share frames:
+**Execution Flow with Extend:**
+```
+Scene 1 (3 segments) - Sequential chain using EXTEND:
+  seg-A: mode=initial, start_frame=keyframe → generate 8s video
+  seg-B: mode=extend, previous_video=seg-A.mp4 → extend by 8s (preserves motion!)
+  seg-C: mode=extend, previous_video=seg-B.mp4 → extend by 8s
 
-```python
-# Scene 1 and Scene 2 keyframes are ready - both scene segment chains can run in parallel
-# (But segments WITHIN each scene must be sequential)
+Scene 2 (4 segments) - Can start in parallel with Scene 1:
+  seg-A: mode=initial, start_frame=keyframe → generate 8s video
+  seg-B: mode=extend, previous_video=seg-A.mp4 → extend by 8s
+  seg-C: mode=extend, previous_video=seg-B.mp4 → extend by 8s
+  seg-D: mode=extend, previous_video=seg-C.mp4 → extend by 8s
 ```
 
-**Execution Flow:**
-```
-Scene 1 (3 segments) - Sequential chain:
-  seg-A: start=keyframe → generate → extract frame
-  seg-B: start=after-seg-A.png → generate → extract frame
-  seg-C: start=after-seg-B.png → generate → (no extraction)
+**Why Extend is Better Than Frame Extraction:**
 
-Scene 2 (1 segment) - Can run in parallel with Scene 1:
-  seg-A: start=keyframe → generate → (no extraction)
+| Old Approach (Frame Extraction) | New Approach (Extend) |
+|--------------------------------|----------------------|
+| Extracts last frame as image | Analyzes last SECOND of video |
+| Loses motion vectors | Preserves camera trajectory |
+| Loses action momentum | Continues ongoing actions |
+| Subject may drift | Maintains subject identity |
+| Camera may jump | Smooth camera continuation |
+
+**Prompt Construction for Extend Mode:**
+```
+Full prompt = link_phrase + " " + motion_prompt + " " + anchor_moment
+
+Example:
+"Continuing the forward momentum from the previous shot, the camera
+tracks alongside the flagship as its shield generators flicker to life
+with crackling blue energy. The massive hull fills the frame as weapon
+ports begin to glow. Camera holds steady on the ship's bow, shields
+fully active."
 ```
 
 After each sub-agent returns:
 1. Parse the returned JSON
 2. Update pipeline.json: Set segment's status to "completed" or "error"
+3. If extend failed, retry or fall back to frame extraction mode
 
 **CHECKPOINT:** Get user approval on videos.
 
