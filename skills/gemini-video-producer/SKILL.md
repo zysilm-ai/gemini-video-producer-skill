@@ -30,12 +30,13 @@ This skill uses a **main agent + sub-agents architecture** for efficient context
 │  - Updates pipeline.json status after each sub-agent returns   │
 │  - Runs FFmpeg concatenation                                    │
 └───────────────────────────┬─────────────────────────────────────┘
-                            │ Task tool spawns sub-agents
+                            │ Task tool spawns general-purpose agents
+                            │ with embedded instructions from .claude/agents/
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
 │ asset-generator│   │keyframe-generator│ │segment-generator│
-│ sub-agent     │   │ sub-agent     │   │ sub-agent     │
+│ (general-purpose)│ │ (general-purpose)│ │ (general-purpose)│
 ├───────────────┤   ├───────────────┤   ├───────────────┤
 │ Fresh context │   │ Fresh context │   │ Fresh context │
 │ MCP browser   │   │ MCP browser   │   │ MCP browser   │
@@ -50,6 +51,8 @@ This skill uses a **main agent + sub-agents architecture** for efficient context
 - Parallel execution possible for independent tasks
 - Easy retry of individual failed generations
 - Main agent stays focused on orchestration
+
+**Implementation Note:** Sub-agents are spawned using `subagent_type="general-purpose"` with the full instructions from `.claude/agents/*.md` files embedded in the prompt. This achieves the same isolation benefits while using Claude Code's built-in agent system.
 
 ## Prerequisites & Setup
 
@@ -80,9 +83,9 @@ Flow is a project-based AI filmmaking tool with these generation modes:
 | Mode | German Label | Model | Purpose |
 |------|--------------|-------|---------|
 | Text to Image | "Bild erstellen" | Nano Banana Pro | Generate assets and keyframes |
-| Video from Frames | "Video aus Frames" | Veo 3.1 Fast | Generate video segments from start frame |
-| Text to Video | "Video aus Text" | Veo 3.1 Fast | Generate video from text only |
-| Video from Elements | "Video aus Elementen" | Veo 3.1 Fast | Generate video with reference elements |
+| Video from Frames | "Video aus Frames" | Veo 3.1 - Quality | Generate video segments from start frame |
+| Text to Video | "Video aus Text" | Veo 3.1 - Quality | Generate video from text only |
+| Video from Elements | "Video aus Elementen" | Veo 3.1 - Quality | Generate video with reference elements |
 
 **Key Interface Elements:**
 - Mode selector dropdown (combobox) to switch between generation types
@@ -90,6 +93,12 @@ Flow is a project-based AI filmmaking tool with these generation modes:
 - "add" buttons for uploading reference images/frames
 - "Erstellen" (Create) button to start generation
 - Generated content appears in the gallery (Videos/Images tabs)
+- Settings button ("tune" / "Einstellungen") to configure model and output count
+
+**REQUIRED Video Settings (configure via Settings button):**
+- **Model:** Veo 3.1 - Quality (NOT Veo 3.1 - Fast)
+- **Outputs per prompt:** 1 (NOT 2)
+- **Aspect ratio:** Querformat 16:9 (Landscape)
 
 ## MANDATORY WORKFLOW REQUIREMENTS
 
@@ -129,13 +138,18 @@ Three sub-agents are defined in `.claude/agents/`:
 
 ## How to Invoke Sub-Agents
 
-Use the Task tool with `subagent_type` matching the agent name:
+Use the Task tool with `subagent_type="general-purpose"` and embed the agent instructions from `.claude/agents/` in the prompt:
 
 ```
 Task(
-  subagent_type="asset-generator",
+  subagent_type="general-purpose",
   prompt='''
-  Generate this asset:
+  You are an asset-generator sub-agent. Follow these instructions:
+
+  [Read and embed full contents of .claude/agents/asset-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
   {
     "asset_id": "hero_character",
     "prompt": "A heroic knight in silver armor, standing tall, dramatic lighting",
@@ -147,22 +161,29 @@ Task(
 )
 ```
 
+**IMPORTANT:** Before spawning sub-agents, use the Read tool to load the agent instructions:
+- `Read(".claude/agents/asset-generator.md")` for asset generation
+- `Read(".claude/agents/keyframe-generator.md")` for keyframe generation
+- `Read(".claude/agents/segment-generator.md")` for segment generation
+
+Then embed those instructions in the Task prompt.
+
 **Parallel Execution:** For independent tasks, spawn multiple sub-agents in a single message:
 
 ```
-# Assets can be generated in parallel
-Task(subagent_type="asset-generator", prompt="...asset 1...", description="Generate asset 1")
-Task(subagent_type="asset-generator", prompt="...asset 2...", description="Generate asset 2")
-Task(subagent_type="asset-generator", prompt="...asset 3...", description="Generate asset 3")
+# Assets can be generated in parallel (all use general-purpose with embedded instructions)
+Task(subagent_type="general-purpose", prompt="[asset-generator instructions] + asset 1 task", description="Generate asset 1")
+Task(subagent_type="general-purpose", prompt="[asset-generator instructions] + asset 2 task", description="Generate asset 2")
+Task(subagent_type="general-purpose", prompt="[asset-generator instructions] + asset 3 task", description="Generate asset 3")
 ```
 
 **Sequential Execution:** Segments within a scene must be sequential (frame chaining):
 ```
 # Segment A first (uses keyframe)
-result_A = Task(subagent_type="segment-generator", prompt="...seg A with keyframe...")
+result_A = Task(subagent_type="general-purpose", prompt="[segment-generator instructions] + seg A task...")
 
 # Segment B uses extracted frame from A
-result_B = Task(subagent_type="segment-generator", prompt="...seg B with after-seg-A.png...")
+result_B = Task(subagent_type="general-purpose", prompt="[segment-generator instructions] + seg B task...")
 ```
 
 ## Pipeline Architecture
@@ -443,13 +464,21 @@ Create `{output_dir}/pipeline.json`:
 
 ### Phase 4: Asset Execution (via sub-agents)
 
-For each asset in pipeline.json, spawn an `asset-generator` sub-agent:
+**First, read the agent instructions:**
+```
+Read(".claude/agents/asset-generator.md")
+```
+
+For each asset in pipeline.json, spawn a `general-purpose` sub-agent with embedded instructions:
 
 ```
 Task(
-  subagent_type="asset-generator",
+  subagent_type="general-purpose",
   prompt='''
-  Generate this asset:
+  [Embed full contents of .claude/agents/asset-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
   {
     "asset_id": "<asset_id>",
     "prompt": "<asset_prompt>",
@@ -461,13 +490,13 @@ Task(
 )
 ```
 
-**Parallel Execution:** Assets are independent - spawn all asset-generator sub-agents in parallel:
+**Parallel Execution:** Assets are independent - spawn all sub-agents in parallel:
 
 ```python
-# All assets can run simultaneously
-Task(subagent_type="asset-generator", prompt="...asset1...", description="Generate asset 1")
-Task(subagent_type="asset-generator", prompt="...asset2...", description="Generate asset 2")
-Task(subagent_type="asset-generator", prompt="...asset3...", description="Generate asset 3")
+# All assets can run simultaneously (embed same instructions in each)
+Task(subagent_type="general-purpose", prompt="[asset-generator.md] + asset1 task", description="Generate asset 1")
+Task(subagent_type="general-purpose", prompt="[asset-generator.md] + asset2 task", description="Generate asset 2")
+Task(subagent_type="general-purpose", prompt="[asset-generator.md] + asset3 task", description="Generate asset 3")
 ```
 
 After each sub-agent returns:
@@ -479,13 +508,21 @@ After each sub-agent returns:
 
 ### Phase 5: Scene Keyframes Generation (via sub-agents)
 
-For each scene in pipeline.json, spawn a `keyframe-generator` sub-agent:
+**First, read the agent instructions:**
+```
+Read(".claude/agents/keyframe-generator.md")
+```
+
+For each scene in pipeline.json, spawn a `general-purpose` sub-agent with embedded instructions:
 
 ```
 Task(
-  subagent_type="keyframe-generator",
+  subagent_type="general-purpose",
   prompt='''
-  Generate this keyframe:
+  [Embed full contents of .claude/agents/keyframe-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
   {
     "scene_id": "<scene_id>",
     "prompt": "<keyframe_prompt>",
@@ -505,8 +542,8 @@ Task(
 **Parallel Execution:** Keyframes are independent - spawn all in parallel:
 
 ```python
-Task(subagent_type="keyframe-generator", prompt="...scene-01...", description="Generate scene-01 keyframe")
-Task(subagent_type="keyframe-generator", prompt="...scene-02...", description="Generate scene-02 keyframe")
+Task(subagent_type="general-purpose", prompt="[keyframe-generator.md] + scene-01 task", description="Generate scene-01 keyframe")
+Task(subagent_type="general-purpose", prompt="[keyframe-generator.md] + scene-02 task", description="Generate scene-02 keyframe")
 ```
 
 After each sub-agent returns:
@@ -517,6 +554,11 @@ After each sub-agent returns:
 
 ### Phase 6: Segment Execution (via sub-agents)
 
+**First, read the agent instructions:**
+```
+Read(".claude/agents/segment-generator.md")
+```
+
 For each scene in pipeline.json:
   For each segment in scene.segments:
 
@@ -525,8 +567,12 @@ For each scene in pipeline.json:
 ```
 # Scene 1 segments - SEQUENTIAL
 seg_A_result = Task(
-  subagent_type="segment-generator",
+  subagent_type="general-purpose",
   prompt='''
+  [Embed full contents of .claude/agents/segment-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
   {
     "segment_id": "seg-01-A",
     "scene_id": "scene-01",
@@ -543,8 +589,12 @@ seg_A_result = Task(
 
 # Wait for seg_A to complete, then use its extracted frame
 seg_B_result = Task(
-  subagent_type="segment-generator",
+  subagent_type="general-purpose",
   prompt='''
+  [Embed full contents of .claude/agents/segment-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
   {
     "segment_id": "seg-01-B",
     "scene_id": "scene-01",
@@ -561,8 +611,12 @@ seg_B_result = Task(
 
 # Last segment - no extraction needed
 seg_C_result = Task(
-  subagent_type="segment-generator",
+  subagent_type="general-purpose",
   prompt='''
+  [Embed full contents of .claude/agents/segment-generator.md here]
+
+  ---
+  NOW EXECUTE THIS TASK:
   {
     "segment_id": "seg-01-C",
     "scene_id": "scene-01",
@@ -743,10 +797,11 @@ When a sub-agent returns an error:
 | Segment Duration | 8 seconds per generation (Flow Veo limit) |
 | Image Resolution | Up to 1024x1024 (Nano Banana Pro) |
 | Video Resolution | Up to 1080p (4K with AI Ultra) |
-| Rate Limiting | Credits-based (180 free monthly, more with subscription) |
+| Rate Limiting | Credits-based (100 credits per Quality video) |
 | GPU Required | None (cloud-based) |
 | Image Model | Nano Banana Pro |
-| Video Model | Veo 3.1 Fast |
+| Video Model | Veo 3.1 - Quality |
+| Outputs per Prompt | 1 |
 
 **Key Terminology:**
 - **Scene** = A narrative/cinematic unit (any duration). Represents a continuous shot or distinct visual context. Each scene requires a generated starting keyframe.
