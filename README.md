@@ -63,19 +63,19 @@ Claude will:
 │  - Generates pipeline.json                                      │
 │  - Orchestrates sub-agents via Task tool                        │
 │  - Updates pipeline.json status after each sub-agent returns    │
-│  - Runs FFmpeg concatenation                                    │
+│  - Runs video concatenation                                     │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ Task tool spawns isolated agents
-        ┌───────────────────┼───────────────────┬─────────────────┐
-        ▼                   ▼                   ▼                 ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐  ┌──────────────┐
-│asset-generator│   │reference-gen  │   │keyframe-gen   │  │segment-gen   │
-├───────────────┤   ├───────────────┤   ├───────────────┤  ├──────────────┤
-│ Fresh context │   │ Fresh context │   │ Fresh context │  │ Fresh context│
-│ MCP browser   │   │ MCP browser   │   │ MCP browser   │  │ MCP browser  │
-│ Returns path  │   │ Returns path  │   │ Returns path  │  │ initial OR   │
-│ + status      │   │ + status      │   │ + status      │  │ extend mode  │
-└───────────────┘   └───────────────┘   └───────────────┘  └──────────────┘
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│reference-gen  │   │keyframe-gen   │   │segment-gen    │
+├───────────────┤   ├───────────────┤   ├───────────────┤
+│ Subjects,     │   │ Scene start   │   │ Video clips   │
+│ characters,   │   │ compositions  │   │ initial OR    │
+│ objects,      │   │ (one per      │   │ extend mode   │
+│ backgrounds   │   │ scene)        │   │ (8 sec each)  │
+└───────────────┘   └───────────────┘   └───────────────┘
 ```
 
 **Benefits:**
@@ -92,8 +92,7 @@ Claude will:
 | 1 | **Production Philosophy** | Create `philosophy.md` and `style.json` |
 | 2 | **Scene Breakdown** | Create `scene-breakdown.md` with scenes and segments |
 | 3 | **Pipeline Generation** | Create `pipeline.json` v4.0 with all prompts |
-| 4 | **Asset Execution** | Generate backgrounds, characters (parallel) |
-| 4.5 | **Reference Generation** | Generate isolated subject references for consistency |
+| 4 | **Reference Generation** | Generate subjects, characters, objects, backgrounds (parallel) |
 | 5 | **Keyframe Generation** | Generate starting keyframe for each scene (parallel) |
 | 6 | **Segment Execution** | Generate videos using initial + extend modes (sequential per scene) |
 | 7 | **Final Concatenation** | Merge segments into scenes, scenes into output.mp4 |
@@ -209,11 +208,14 @@ output/{project-name}/
 ├── scene-breakdown.md         # Scene plan with segments
 ├── pipeline.json              # v4.0 execution pipeline
 ├── output.mp4                 # FINAL CONCATENATED VIDEO
-├── references/                # Subject reference images (NEW)
-│   ├── hero_ship.png
-│   └── enemy_vessel.png
+├── references/                # All visual references
+│   ├── hero_ship.png          # Subject reference (for Ingredients)
+│   ├── enemy_vessel.png       # Subject reference
+│   ├── characters/            # Character designs
+│   ├── objects/               # Props and items
+│   └── backgrounds/           # Environment images
 ├── keyframes/
-│   ├── scene-01-start.png     # Generated keyframes
+│   ├── scene-01-start.png     # Scene starting compositions
 │   ├── scene-02-start.png
 │   └── scene-03-start.png
 ├── scene-01/
@@ -283,11 +285,10 @@ flow-video-producer-skill/
 │   └── gemini-video-producer/
 │       └── SKILL.md           # Detailed skill instructions
 ├── .claude/
-│   └── agents/                # Sub-agent definitions
-│       ├── asset-generator.md
-│       ├── reference-generator.md
-│       ├── keyframe-generator.md
-│       └── segment-generator.md
+│   └── agents/                # Sub-agent definitions (3 agents)
+│       ├── reference-generator.md   # Subjects, characters, objects, backgrounds
+│       ├── keyframe-generator.md    # Scene starting compositions
+│       └── segment-generator.md     # Video segments (initial + extend)
 ├── scripts/
 │   └── merge_videos.py        # Video concatenation script
 ├── references/

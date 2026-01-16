@@ -30,27 +30,19 @@ This skill uses a **main agent + sub-agents architecture** for efficient context
 │  - Updates pipeline.json status after each sub-agent returns   │
 │  - Runs FFmpeg concatenation                                    │
 └───────────────────────────┬─────────────────────────────────────┘
-                            │ Task tool spawns general-purpose agents
-                            │ with embedded instructions from .claude/agents/
+                            │ Task tool spawns isolated agents
+                            │ with instructions from .claude/agents/
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│ asset-generator│   │keyframe-generator│ │segment-generator│
-│ (general-purpose)│ │ (general-purpose)│ │ (general-purpose)│
+│reference-gen  │   │keyframe-gen   │   │segment-gen    │
 ├───────────────┤   ├───────────────┤   ├───────────────┤
-│ Fresh context │   │ Fresh context │   │ Fresh context │
-│ MCP browser   │   │ MCP browser   │   │ MCP browser   │
-│ Returns path  │   │ Returns path  │   │ Returns paths │
-│ + status only │   │ + status only │   │ + status only │
+│ Images for    │   │ Scene start   │   │ Video clips   │
+│ consistency   │   │ compositions  │   │ initial/extend│
+│ (subjects,    │   │ (one per      │   │ (8 sec each)  │
+│ backgrounds)  │   │ scene)        │   │               │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
-
-**Benefits:**
-- Each generation has isolated memory (no context pollution)
-- Browser automation details don't clutter main conversation
-- Parallel execution possible for independent tasks
-- Easy retry of individual failed generations
-- Main agent stays focused on orchestration
 
 **Implementation Note:** Sub-agents are spawned using `subagent_type="general-purpose"` with the full instructions from `.claude/agents/*.md` files embedded in the prompt. This achieves the same isolation benefits while using Claude Code's built-in agent system.
 
@@ -103,7 +95,7 @@ Flow is a project-based AI filmmaking tool with these generation modes:
 - **Outputs per prompt:** 1 (NOT 2)
 - **Aspect ratio:** Querformat 16:9 (Landscape)
 
-## Continuity Architecture (CRITICAL)
+## Continuity Architecture
 
 **Problem:** AI video generation is stateless. Each generation starts fresh with no memory of:
 - Camera trajectory (was moving left, should continue left)
@@ -154,26 +146,24 @@ Track what has happened narratively in pipeline.json:
 4. **ALWAYS break videos into multiple scenes** - minimum 2 scenes for any video over 5 seconds
 5. **ALWAYS ask user for approval** before proceeding to the next phase
 6. **NEVER generate without a complete pipeline.json** - plan ALL prompts first, execute second
-7. **ALWAYS use sub-agents for generation** - use Task tool to spawn asset-generator, keyframe-generator, segment-generator
+7. **ALWAYS use sub-agents for generation** - use Task tool to spawn reference-generator, keyframe-generator, segment-generator
 8. **ALWAYS update pipeline.json** after each sub-agent returns with status
 9. **ALWAYS move downloads to correct locations** - files download to `.playwright-mcp/`, sub-agents handle this
 
 ## Sub-Agent Definitions
 
-Four sub-agents are defined in `.claude/agents/`:
-
-### asset-generator
-- **Purpose:** Generate ONE asset image (character, background, object) via Flow
-- **Input:** asset_id, prompt, output_path, project_dir
-- **Output:** JSON with status, asset_id, output_path, message
-- **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
+Three sub-agents are defined in `.claude/agents/`:
 
 ### reference-generator
-- **Purpose:** Generate ONE reference image for subject consistency (isolated subject on clean background)
-- **Input:** reference_id, prompt, output_path, project_dir
-- **Output:** JSON with status, reference_id, output_path, message
+- **Purpose:** Generate visual reference images for video production (subjects, characters, objects, backgrounds)
+- **Input:** type (reference|character|object|background), reference_id, subject_name, prompt, output_path, project_dir, style_context
+- **Output:** JSON with status, type, reference_id, subject_name, output_path, message
 - **Uses:** Flow "Bild erstellen" mode (Nano Banana Pro)
-- **Note:** References are used as "Ingredients" to maintain subject identity across segments
+- **Types:**
+  - `reference`: Isolated subjects for "Ingredients to Video" (MUST have clean background)
+  - `character`: Character designs and poses
+  - `object`: Props, vehicles, items
+  - `background`: Environment images, settings
 
 ### keyframe-generator
 - **Purpose:** Generate ONE scene starting keyframe via Flow
@@ -193,43 +183,45 @@ Four sub-agents are defined in `.claude/agents/`:
 
 ## How to Invoke Sub-Agents
 
-Use the Task tool with `subagent_type="general-purpose"` and embed the agent instructions from `.claude/agents/` in the prompt:
+Use the Task tool with the appropriate `subagent_type` and provide the task details in the prompt:
 
 ```
 Task(
-  subagent_type="general-purpose",
+  subagent_type="reference-generator",
   prompt='''
-  You are an asset-generator sub-agent. Follow these instructions:
+  Generate a subject reference image.
 
-  [Read and embed full contents of .claude/agents/asset-generator.md here]
-
-  ---
-  NOW EXECUTE THIS TASK:
+  Task:
   {
-    "asset_id": "hero_character",
-    "prompt": "A heroic knight in silver armor, standing tall, dramatic lighting",
-    "output_path": "output/project/assets/characters/hero.png",
-    "project_dir": "D:/Project/gemini-video-producer-skill/output/project"
+    "type": "reference",
+    "reference_id": "hero_ship",
+    "subject_name": "Hero Battleship",
+    "prompt": "Massive silver-blue battleship with angular hull, twin engine pods glowing cyan",
+    "isolation_style": "centered on black space background, dramatic three-quarter view",
+    "output_path": "output/project/references/hero_ship.png",
+    "project_dir": "D:/Project/gemini-video-producer-skill/output/project",
+    "style_context": {
+      "art_style": "cinematic realistic sci-fi",
+      "lighting": "dramatic rim lighting"
+    }
   }
   ''',
-  description="Generate hero character asset"
+  description="Generate hero_ship reference"
 )
 ```
 
-**IMPORTANT:** Before spawning sub-agents, use the Read tool to load the agent instructions:
-- `Read(".claude/agents/asset-generator.md")` for asset generation
-- `Read(".claude/agents/keyframe-generator.md")` for keyframe generation
-- `Read(".claude/agents/segment-generator.md")` for segment generation
-
-Then embed those instructions in the Task prompt.
+**Available Sub-Agent Types:**
+- `reference-generator` - for references, characters, objects, backgrounds
+- `keyframe-generator` - for scene starting keyframes
+- `segment-generator` - for video segments (initial and extend modes)
 
 **Parallel Execution:** For independent tasks, spawn multiple sub-agents in a single message:
 
 ```
-# Assets can be generated in parallel (all use general-purpose with embedded instructions)
-Task(subagent_type="general-purpose", prompt="[asset-generator instructions] + asset 1 task", description="Generate asset 1")
-Task(subagent_type="general-purpose", prompt="[asset-generator instructions] + asset 2 task", description="Generate asset 2")
-Task(subagent_type="general-purpose", prompt="[asset-generator instructions] + asset 3 task", description="Generate asset 3")
+# References can be generated in parallel
+Task(subagent_type="reference-generator", prompt="[reference 1 task]", description="Generate reference 1")
+Task(subagent_type="reference-generator", prompt="[reference 2 task]", description="Generate reference 2")
+Task(subagent_type="reference-generator", prompt="[background task]", description="Generate background")
 ```
 
 **Sequential Execution:** Segments within a scene must be sequential (frame chaining):
@@ -483,19 +475,26 @@ Create `{output_dir}/pipeline.json`:
   },
   "references": {
     "human_flagship": {
-      "prompt": "Isolated silver-blue angular dreadnought warship, clean dark background, dramatic rim lighting, no other elements, reference image for video generation",
+      "type": "reference",
+      "subject_name": "Human Flagship",
+      "prompt": "Isolated silver-blue angular dreadnought warship, clean dark background, dramatic rim lighting",
       "output": "references/human_flagship.png",
       "status": "pending"
     },
     "enemy_vessel": {
-      "prompt": "Isolated dark crimson warship with organic protrusions, clean dark background, dramatic lighting, no other elements, reference image",
+      "type": "reference",
+      "subject_name": "Enemy Vessel",
+      "prompt": "Isolated dark crimson warship with organic protrusions, clean dark background, dramatic lighting",
       "output": "references/enemy_vessel.png",
       "status": "pending"
+    },
+    "space_nebula": {
+      "type": "background",
+      "subject_name": "Space Nebula",
+      "prompt": "Deep space vista with colorful purple and blue nebula, scattered stars, cinematic wide composition",
+      "output": "references/backgrounds/nebula.png",
+      "status": "pending"
     }
-  },
-  "assets": {
-    "backgrounds": {},
-    "characters": {}
   },
   "scenes": [
     {
@@ -582,7 +581,7 @@ Create `{output_dir}/pipeline.json`:
 - `segments[].link_phrase`: How this segment connects to previous (for extend mode)
 - `segments[].anchor_moment`: Holdable ending for clean extension point
 
-### Veo Motion Prompt Guidelines (CRITICAL)
+### Veo Motion Prompt Guidelines
 
 Motion prompts for video segments MUST follow this official Veo structure:
 
@@ -629,93 +628,57 @@ Dynamic tracking shot following a massive human battleship as it unleashes a dev
 
 **CHECKPOINT:** Get user approval before proceeding.
 
-### Phase 4: Asset Execution (via sub-agents)
+### Phase 4: Reference Generation (via sub-agents)
 
-**First, read the agent instructions:**
-```
-Read(".claude/agents/asset-generator.md")
-```
+**Purpose:** Generate all visual reference images needed for video production:
+- **Subject references** (isolated, for "Ingredients to Video")
+- **Characters** (design reference)
+- **Objects** (props, vehicles)
+- **Backgrounds** (environments)
 
-For each asset in pipeline.json, spawn a `general-purpose` sub-agent with embedded instructions:
-
-```
-Task(
-  subagent_type="general-purpose",
-  prompt='''
-  [Embed full contents of .claude/agents/asset-generator.md here]
-
-  ---
-  NOW EXECUTE THIS TASK:
-  {
-    "asset_id": "<asset_id>",
-    "prompt": "<asset_prompt>",
-    "output_path": "<full_output_path>",
-    "project_dir": "<project_directory>"
-  }
-  ''',
-  description="Generate <asset_id> asset"
-)
-```
-
-**Parallel Execution:** Assets are independent - spawn all sub-agents in parallel:
-
-```python
-# All assets can run simultaneously (embed same instructions in each)
-Task(subagent_type="general-purpose", prompt="[asset-generator.md] + asset1 task", description="Generate asset 1")
-Task(subagent_type="general-purpose", prompt="[asset-generator.md] + asset2 task", description="Generate asset 2")
-Task(subagent_type="general-purpose", prompt="[asset-generator.md] + asset3 task", description="Generate asset 3")
-```
-
-After each sub-agent returns:
-1. Parse the returned JSON
-2. Update pipeline.json: Set asset's status to "completed" or "error"
-3. If error, note it for user review
-
-**CHECKPOINT:** Review assets (read the image files), get user approval.
-
-### Phase 4.5: Reference Generation (for Subject Consistency)
-
-**Purpose:** Generate isolated reference images of key subjects to maintain visual consistency across all video segments.
-
-**First, read the agent instructions:**
-```
-Read(".claude/agents/reference-generator.md")
-```
-
-For each reference in pipeline.json, spawn a `general-purpose` sub-agent:
+For each reference in pipeline.json, spawn a `reference-generator` sub-agent:
 
 ```
 Task(
-  subagent_type="general-purpose",
+  subagent_type="reference-generator",
   prompt='''
-  [Embed full contents of .claude/agents/reference-generator.md here]
+  Generate a subject reference image.
 
-  ---
-  NOW EXECUTE THIS TASK:
+  Task:
   {
+    "type": "reference",
     "reference_id": "human_flagship",
-    "prompt": "Isolated silver-blue angular dreadnought warship, clean dark background, dramatic rim lighting, no other elements, centered composition, reference image for video generation",
+    "subject_name": "Human Flagship",
+    "prompt": "Massive silver-blue angular dreadnought warship with glowing cyan engines",
+    "isolation_style": "centered on clean dark space background, dramatic rim lighting, three-quarter view",
     "output_path": "<project_dir>/references/human_flagship.png",
-    "project_dir": "<project_directory>"
+    "project_dir": "<project_directory>",
+    "style_context": {
+      "art_style": "cinematic photorealistic sci-fi",
+      "lighting": "dramatic rim lighting"
+    }
   }
   ''',
   description="Generate human_flagship reference"
 )
 ```
 
-**Reference Image Requirements:**
-- **Isolated subject** on clean/dark background (no scene elements)
-- **Centered composition** for easy recognition
-- **Consistent with style.json** colors and lighting
-- **No action or motion** - static reference pose
+**Type-Specific Requirements:**
 
-**Parallel Execution:** References are independent - spawn all in parallel.
+| Type | Isolation | Background | Use Case |
+|------|-----------|------------|----------|
+| `reference` | REQUIRED | Black/neutral | Upload to "Ingredients to Video" |
+| `character` | Recommended | Simple | Character design reference |
+| `object` | Recommended | Simple | Prop/item reference |
+| `background` | N/A | Full scene | Environment reference |
+
+**Parallel Execution:** All references are independent - spawn all in parallel.
 
 After each sub-agent returns:
 1. Parse the returned JSON
 2. Update pipeline.json: Set reference's status to "completed" or "error"
 
-**CHECKPOINT:** Review reference images, get user approval. These images will be used as "Ingredients" in video generation.
+**CHECKPOINT:** Review reference images, get user approval. Subject references will be used as "Ingredients" in video generation.
 
 ### Phase 5: Scene Keyframes Generation (via sub-agents)
 
@@ -956,21 +919,24 @@ python {skill_dir}/scripts/merge_videos.py -o output.mp4 scene-01/scene.mp4 scen
 ├── style.json
 ├── scene-breakdown.md
 ├── pipeline.json
-├── output.mp4                      <- FINAL VIDEO (with transitions)
-├── assets/
-│   ├── characters/
-│   └── backgrounds/
+├── output.mp4                      <- FINAL VIDEO
+├── references/                     <- All visual references
+│   ├── hero_ship.png               <- Subject reference (for Ingredients)
+│   ├── enemy_vessel.png            <- Subject reference
+│   ├── characters/                 <- Character designs
+│   │   └── captain.png
+│   ├── objects/                    <- Props and items
+│   │   └── artifact.png
+│   └── backgrounds/                <- Environment images
+│       └── nebula.png
 ├── keyframes/
-│   ├── scene-01-start.png          <- Generated (scene 1 start)
-│   └── scene-02-start.png          <- Generated (scene 2 start)
+│   ├── scene-01-start.png          <- Generated scene start
+│   └── scene-02-start.png          <- Generated scene start
 ├── scene-01/
 │   ├── seg-A.mp4                   <- Segment videos
 │   ├── seg-B.mp4
 │   ├── seg-C.mp4
-│   ├── scene.mp4                   <- Concatenated scene (intermediate)
-│   └── extracted/                  <- Internal extracted frames
-│       ├── after-seg-A.png
-│       └── after-seg-B.png
+│   └── scene.mp4                   <- Concatenated scene
 ├── scene-02/
 │   ├── seg-A.mp4
 │   └── scene.mp4
@@ -978,9 +944,9 @@ python {skill_dir}/scripts/merge_videos.py -o output.mp4 scene-01/scene.mp4 scen
 ```
 
 **Key Points:**
-- `keyframes/` contains only **generated** keyframes (one per scene)
-- `scene-XX/extracted/` contains **extracted** frames (internal, for segment chaining)
-- `scene-XX/scene.mp4` is the intermediate concatenated scene (before transitions)
+- `references/` contains all visual reference images (subjects, characters, objects, backgrounds)
+- `keyframes/` contains **scene starting compositions** (one per scene)
+- `scene-XX/` contains segment videos and concatenated scene video
 
 ## TodoWrite Template
 
@@ -992,19 +958,19 @@ python {skill_dir}/scripts/merge_videos.py -o output.mp4 scene-01/scene.mp4 scen
 5. Get user approval on philosophy
 6. Create scene-breakdown.md (with scenes and segments)
 7. Get user approval on scene breakdown
-8. Create pipeline.json (v3.0 with nested segments)
+8. Create pipeline.json (v4.0 with references and segments)
 9. Get user approval on pipeline
-10. Spawn asset-generator sub-agents (parallel)
-11. Update pipeline.json with asset results
-12. Review assets, get user approval
+10. Spawn reference-generator sub-agents (parallel) - subjects, characters, objects, backgrounds
+11. Update pipeline.json with reference results
+12. Review references, get user approval
 13. Spawn keyframe-generator sub-agents (parallel)
 14. Update pipeline.json with keyframe results
 15. Review keyframes, get user approval
 16. Spawn segment-generator sub-agents (sequential per scene, parallel across scenes)
 17. Update pipeline.json with segment results
 18. Get user approval on videos
-19. Concatenate segments within each scene (ffmpeg)
-20. Concatenate scenes with transitions into output.mp4
+19. Concatenate segments within each scene
+20. Concatenate scenes into output.mp4
 21. Provide final summary
 ```
 
