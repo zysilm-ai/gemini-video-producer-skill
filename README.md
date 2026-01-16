@@ -283,20 +283,20 @@ output/{project-name}/
 flow-video-producer-skill/
 ├── skills/
 │   └── gemini-video-producer/
-│       └── SKILL.md           # Detailed skill instructions
+│       ├── SKILL.md                 # Main skill (~175 lines)
+│       └── reference/               # Progressive disclosure
+│           ├── pipeline-schema.md   # Pipeline.json schema details
+│           ├── veo-prompts.md       # Veo motion prompt guidelines
+│           └── templates.md         # File templates
 ├── .claude/
-│   └── agents/                # Sub-agent definitions (3 agents)
-│       ├── reference-generator.md   # Subjects, characters, objects, backgrounds
+│   └── agents/                      # Sub-agent definitions
+│       ├── reference-generator.md   # Images (subjects, characters, backgrounds)
 │       ├── keyframe-generator.md    # Scene starting compositions
 │       └── segment-generator.md     # Video segments (initial + extend)
 ├── scripts/
-│   └── merge_videos.py        # Video concatenation script
-├── references/
-│   ├── prompt-engineering.md
-│   ├── style-systems.md
-│   └── troubleshooting.md
-├── README.md                  # This file
-└── output/                    # Generated projects
+│   └── merge_videos.py              # Video concatenation
+├── README.md                        # This file
+└── output/                          # Generated projects
 ```
 
 ## Contributing
