@@ -65,17 +65,100 @@ and orange, cinematic sci-fi blockbuster quality.
 | Too short (30-50 words) | Expand to 100-150 words |
 | Missing style/mood | Add atmosphere ("Tense, dramatic rim lighting") |
 
-## Prompt Linking for Extend Mode
+---
 
-When using extend mode, construct prompts that reference continuation:
+## Keyframe Prompt Guidelines
+
+Keyframes define the visual start and end points for Video aus Frames generation. Each keyframe should be a complete, static composition that can stand alone as an image.
+
+### Structure for Keyframe Prompts
+
+`[Shot Type] + [Subject Position] + [Key Details] + [Environment] + [Style/Lighting]`
+
+### Start Keyframe vs End Keyframe
+
+| Aspect | Start Keyframe | End Keyframe |
+|--------|----------------|--------------|
+| **Purpose** | Establish the scene opening | Define the motion destination |
+| **Composition** | Often wider, establishing | Often closer, resolved |
+| **Subject** | Entering/approaching | Arrived/settled |
+| **Energy** | Beginning, anticipation | Concluded, resolution |
+
+### Keyframe Prompt Examples
+
+**Start Keyframe:**
+```
+Wide shot of massive fleet in V-formation against colorful nebula backdrop.
+Silver-blue warships with glowing cyan engines arranged in perfect symmetry,
+flagship dreadnought prominent at formation center. Ships at distance,
+establishing scale and grandeur. Dramatic rim lighting on angular hulls,
+deep space environment with scattered stars. Cinematic 16:9 composition,
+photorealistic sci-fi quality.
+```
+
+**Corresponding End Keyframe:**
+```
+Medium shot with flagship filling lower third of frame. Warships visible
+passing by in periphery, motion implied by positioning. Flagship engines
+pulsing bright cyan, shield emitters beginning to glow. Same nebula backdrop
+visible behind ship. Camera has approached significantly from start position.
+Dramatic lighting, cinematic composition, photorealistic detail.
+```
+
+### Keyframe Chain Design
+
+When designing keyframes for chained segments, ensure visual continuity:
 
 ```
-Full prompt = link_phrase + motion_prompt + anchor_moment
-
-Example:
-"Continuing the forward momentum from the previous shot, the camera
-tracks alongside the flagship as its shield generators flicker to life
-with crackling blue energy. The massive hull fills the frame as weapon
-ports begin to glow. Camera holds steady on the ship's bow, shields
-fully active."
+Segment A: [Wide fleet shot] ────motion────> [Medium flagship approach]
+                                                      │
+Segment B: [Medium flagship approach] ─motion─> [Close flagship shields]
+           (reuses A's end keyframe)
+                                                      │
+Segment C: [Close flagship shields] ──motion──> [Weapon ports firing]
+           (reuses B's end keyframe)
 ```
+
+### Keyframe Quality Checklist
+
+| Requirement | Description |
+|-------------|-------------|
+| **16:9 aspect** | Matches video output format |
+| **Static composition** | No motion blur, sharp details |
+| **Complete scene** | All key elements visible |
+| **Style consistent** | Matches project visual style |
+| **Logical sequence** | End keyframe follows naturally from motion |
+
+### Common Keyframe Mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Motion blur in composition | Describe frozen moment, sharp details |
+| Missing key subjects | Include all elements that will be in the video |
+| Inconsistent style between frames | Reference same lighting, color palette |
+| Too similar start/end | Ensure visible difference for motion |
+| Describing motion in keyframe | Keyframes are static - save motion for motion_prompt |
+
+### Relationship: Keyframes vs Motion Prompt
+
+| Element | Describes | Example |
+|---------|-----------|---------|
+| **Start Keyframe** | Opening frozen moment | "Wide shot of fleet in formation..." |
+| **End Keyframe** | Closing frozen moment | "Medium shot with flagship prominent..." |
+| **Motion Prompt** | How we get there | "Slow dolly push forward through fleet..." |
+
+The motion prompt should NOT re-describe what's in the keyframes. It describes the journey between them:
+
+**Good motion prompt (with keyframes):**
+```
+Slow dolly push forward, camera gradually approaching the flagship,
+warships drifting past on either side, engines pulsing with rhythmic light,
+smooth cinematic movement through the formation.
+```
+
+**Bad motion prompt (with keyframes):**
+```
+Wide shot of fleet in V-formation. Camera pushes forward. Ships have
+cyan engines. Flagship is silver-blue. Camera ends on medium shot.
+```
+*Problems: Re-describes keyframe content, wastes prompt on static descriptions*

@@ -83,23 +83,37 @@
 **Narrative State at Start**: [What viewer understands]
 **Narrative State at End**: [What has changed]
 
-**Starting Keyframe**:
-[Detailed visual description for keyframe generation]
-
 **Segments**:
-1. **Seg A** (0-8s) [mode: initial]:
-   - Motion: [description]
-   - Anchor: [holdable moment]
 
-2. **Seg B** (8-16s) [mode: extend]:
-   - Link: "Continuing from Seg A..."
-   - Motion: [description]
-   - Anchor: [holdable moment]
+### Seg A [type: initial]
+**Start Keyframe**: [Detailed visual description for opening composition]
+**End Keyframe**: [Detailed visual description for closing composition]
+**Motion**: [Camera/subject motion between keyframes]
+**Anchor Moment**: [Holdable beat at segment end]
+
+### Seg B [type: extend]
+**Start Keyframe**: Uses Seg A end keyframe
+**End Keyframe**: [Detailed visual description for closing composition]
+**Motion**: [Camera/subject motion between keyframes]
+**Anchor Moment**: [Holdable beat at segment end]
 
 ---
 
 ## Scene 2: [Title]
 [Same structure as Scene 1]
+```
+
+## Keyframe Chain Planning
+
+When planning keyframes, visualize the chain:
+
+```
+Scene 1:
+  Seg A: [start-A] ──motion──> [end-A]
+  Seg B: [end-A]   ──motion──> [end-B]  (reuses A's end)
+
+Scene 2:
+  Seg A: [start-C] ──motion──> [end-C]  (new scene, fresh start)
 ```
 
 ## When to Create New Scenes vs Add Segments
@@ -111,3 +125,12 @@
 | Time jump occurs | No narrative break needed |
 | Subject/focus changes | |
 | Want cinematic transition | |
+
+## Keyframe Count per Scene
+
+| Segments | Initial Type | Extend Type | Total Keyframes |
+|----------|--------------|-------------|-----------------|
+| 1 | 1 (2 keyframes) | 0 | 2 |
+| 2 | 1 (2 keyframes) | 1 (1 keyframe) | 3 |
+| 3 | 1 (2 keyframes) | 2 (2 keyframes) | 4 |
+| 4 | 1 (2 keyframes) | 3 (3 keyframes) | 5 |
