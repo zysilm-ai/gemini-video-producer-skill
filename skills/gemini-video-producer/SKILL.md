@@ -55,7 +55,7 @@ Create `pipeline.json`. See [reference/pipeline-schema.md](reference/pipeline-sc
 **Get user approval.**
 
 ### Phase 4: References
-Spawn `reference-generator` for each reference (parallel):
+Spawn `reference-generator` for each reference (sequentially, one at a time):
 
 ```
 Task(
@@ -115,7 +115,7 @@ Task(
 
 **For extend-type segments:** Use the previous segment's end_keyframe as start_keyframe_path.
 
-Segments within a scene must be generated sequentially (each depends on previous segment's end keyframe for continuity checking). Different scenes can be generated in parallel.
+All segments must be generated sequentially (one at a time) due to shared browser instance.
 
 **Get user approval.**
 
@@ -138,6 +138,7 @@ python scripts/merge_videos.py -o output.mp4 scene-01/scene.mp4 scene-02/scene.m
 4. **Never generate without pipeline.json** - plan first, execute second
 5. **Use sub-agents for generation** - reference-generator, keyframe-generator, segment-generator
 6. **Update pipeline.json** after each sub-agent returns
+7. **Execute sub-agents sequentially** - All sub-agents share a single MCP Playwright browser instance. Running them in parallel causes race conditions. Always wait for one sub-agent to complete before spawning the next.
 
 ## Sub-Agents
 

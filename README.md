@@ -82,7 +82,7 @@ Claude will:
 **Benefits:**
 - Each generation has isolated memory (no context pollution)
 - Browser automation details don't clutter main conversation
-- Parallel execution for independent tasks
+- Sequential execution ensures browser stability (shared MCP Playwright instance)
 - Easy retry of individual failed generations
 
 ## Workflow Phases
@@ -93,7 +93,7 @@ Claude will:
 | 1 | **Production Philosophy** | Create `philosophy.md` and `style.json` |
 | 2 | **Scene Breakdown** | Create `scene-breakdown.md` with scenes and segments |
 | 3 | **Pipeline Generation** | Create `pipeline.json` v7.0 with keyframe + motion prompts |
-| 4 | **Reference Generation** | Generate subjects, characters, objects, backgrounds (parallel) |
+| 4 | **Reference Generation** | Generate subjects, characters, objects, backgrounds (sequential) |
 | 5 | **Keyframe Generation** | Generate start/end keyframes for each segment |
 | 6 | **Segment Execution** | Generate videos via Video aus Frames with keyframes |
 | 7 | **Final Concatenation** | Merge segments into scenes, scenes into output.mp4 |
